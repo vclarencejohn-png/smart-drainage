@@ -13,8 +13,8 @@ app.use(express.json());
 
 // Supabase connection
 const supabase = createClient(
-  'https://iasxvcfmnrxlcsyyziwu.supabase.co',
-  'sb_secret_cH1QDsYs9KpRn5D4KulGnQ_fIkKuJvr'
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
 );
 
 // ============================================
