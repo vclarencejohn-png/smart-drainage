@@ -3,7 +3,7 @@ import { io } from "socket.io-client";
 import axios from "axios";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
-const SERVER = "http://localhost:3001";
+const SERVER = "https://smart-drainage-production.up.railway.app";
 const socket = io(SERVER);
 
 export default function App() {
