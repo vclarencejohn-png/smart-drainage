@@ -188,6 +188,7 @@ function AdminPanel({ user, onLogout }) {
 export default function App() {
   const [user, setUser] = useState(() => { const s = sessionStorage.getItem("drainage_user"); return s ? JSON.parse(s) : null; });
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
   const [units, setUnits] = useState([]);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [data, setData] = useState({ debris_level: 0, overflow: 0, led_status: "GREEN", battery: 100 });
@@ -264,11 +265,9 @@ export default function App() {
           <button className="ubtn" onClick={() => setIsMobile(!isMobile)} style={{ background: "#1e293b", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "6px 12px", fontSize: "12px" }}>
             {isMobile ? "🖥️ Desktop" : "📱 Mobile"}
           </button>
-          {installPrompt && (
-            <button className="ubtn" onClick={handleInstall} style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "600" }}>
-              📲 Install App
-            </button>
-          )}
+          <button className="ubtn" onClick={() => setShowInstall(true)} style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "600" }}>
+            📲 Install App
+          </button>
           <button className="ubtn" onClick={handleLogout} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", cursor: "pointer" }}>Logout</button>
         </div>
       </div>
@@ -328,6 +327,62 @@ export default function App() {
           <p style={{ fontSize: "11px", color: "#334155", textAlign: "right", marginTop: "8px" }}>Last updated: {data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : "—"}</p>
         </div>
       </div>
+
+      {/* Install Guide Modal */}
+      {showInstall && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <div style={{ background: "#131929", borderRadius: "20px", padding: "32px", maxWidth: "480px", width: "100%", border: "1px solid rgba(255,255,255,0.1)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700" }}>📲 Install Smart Drainage App</h2>
+              <button onClick={() => setShowInstall(false)} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "22px", cursor: "pointer" }}>✕</button>
+            </div>
+
+            {/* Android */}
+            <div style={{ background: "#0a0f1e", borderRadius: "12px", padding: "16px", marginBottom: "12px", border: "1px solid rgba(34,197,94,0.2)" }}>
+              <p style={{ fontWeight: "700", marginBottom: "10px", color: "#22c55e", fontSize: "14px" }}>🤖 Android (Chrome)</p>
+              <ol style={{ paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: "#94a3b8" }}>
+                <li>Open <strong style={{ color: "white" }}>Chrome</strong> on your Android phone</li>
+                <li>Go to <strong style={{ color: "#22c55e" }}>smart-drainage.vercel.app</strong></li>
+                <li>Tap the <strong style={{ color: "white" }}>3 dots menu ⋮</strong> at top right</li>
+                <li>Tap <strong style={{ color: "white" }}>"Add to Home Screen"</strong></li>
+                <li>Tap <strong style={{ color: "white" }}>"Add"</strong> ✅</li>
+              </ol>
+              {installPrompt && (
+                <button onClick={handleInstall} style={{ marginTop: "12px", background: "#22c55e", color: "#000", border: "none", borderRadius: "8px", padding: "10px", fontSize: "13px", fontWeight: "700", cursor: "pointer", width: "100%" }}>
+                  ⚡ Quick Install — Tap Here!
+                </button>
+              )}
+            </div>
+
+            {/* iPhone */}
+            <div style={{ background: "#0a0f1e", borderRadius: "12px", padding: "16px", marginBottom: "12px", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <p style={{ fontWeight: "700", marginBottom: "10px", color: "#94a3b8", fontSize: "14px" }}>🍎 iPhone (Safari)</p>
+              <ol style={{ paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: "#94a3b8" }}>
+                <li>Open <strong style={{ color: "white" }}>Safari</strong> on your iPhone</li>
+                <li>Go to <strong style={{ color: "#22c55e" }}>smart-drainage.vercel.app</strong></li>
+                <li>Tap the <strong style={{ color: "white" }}>Share button ⬆️</strong> at the bottom</li>
+                <li>Tap <strong style={{ color: "white" }}>"Add to Home Screen"</strong></li>
+                <li>Tap <strong style={{ color: "white" }}>"Add"</strong> ✅</li>
+              </ol>
+            </div>
+
+            {/* Desktop */}
+            <div style={{ background: "#0a0f1e", borderRadius: "12px", padding: "16px", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <p style={{ fontWeight: "700", marginBottom: "10px", color: "#94a3b8", fontSize: "14px" }}>🖥️ Desktop (Chrome)</p>
+              <ol style={{ paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: "#94a3b8" }}>
+                <li>Open <strong style={{ color: "white" }}>Chrome</strong> on your computer</li>
+                <li>Go to <strong style={{ color: "#22c55e" }}>smart-drainage.vercel.app</strong></li>
+                <li>Look for <strong style={{ color: "white" }}>⊕ install icon</strong> in the address bar</li>
+                <li>Click it and select <strong style={{ color: "white" }}>"Install"</strong> ✅</li>
+              </ol>
+            </div>
+
+            <p style={{ fontSize: "11px", color: "#334155", textAlign: "center", marginTop: "16px" }}>
+              Once installed, it works like a real app — no app store needed!
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
