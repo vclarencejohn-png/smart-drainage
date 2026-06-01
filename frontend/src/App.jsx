@@ -6,9 +6,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "rec
 const SERVER = "https://smart-drainage-production.up.railway.app";
 const socket = io(SERVER);
 
-// ============================================
-// LOGIN PAGE
-// ============================================
 function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -17,21 +14,18 @@ function LoginPage({ onLogin }) {
 
   const handleLogin = async () => {
     if (!username || !password) return setError("Please enter username and password.");
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const res = await axios.post(`${SERVER}/api/login`, { username, password });
       sessionStorage.setItem("drainage_user", JSON.stringify(res.data.user));
       onLogin(res.data.user);
-    } catch {
-      setError("Invalid username or password.");
-    }
+    } catch { setError("Invalid username or password."); }
     setLoading(false);
   };
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", padding: "20px" }}>
-      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; } input:focus { outline: 2px solid #22c55e !important; }`}</style>
+      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
       <div style={{ background: "#131929", borderRadius: "20px", padding: "40px", width: "100%", maxWidth: "400px", border: "1px solid rgba(255,255,255,0.08)" }}>
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <div style={{ fontSize: "48px", marginBottom: "12px" }}>💧</div>
@@ -61,9 +55,6 @@ function LoginPage({ onLogin }) {
   );
 }
 
-// ============================================
-// ADMIN PANEL
-// ============================================
 function AdminPanel({ user, onLogout }) {
   const [tab, setTab] = useState("units");
   const [units, setUnits] = useState([]);
@@ -73,59 +64,41 @@ function AdminPanel({ user, onLogout }) {
   const [msg, setMsg] = useState("");
 
   const loadData = async () => {
-    const [u, us] = await Promise.all([
-      axios.get(`${SERVER}/api/units`),
-      axios.get(`${SERVER}/api/users`)
-    ]);
-    setUnits(u.data);
-    setUsers(us.data);
+    const [u, us] = await Promise.all([axios.get(`${SERVER}/api/units`), axios.get(`${SERVER}/api/users`)]);
+    setUnits(u.data); setUsers(us.data);
   };
 
   useEffect(() => { loadData(); }, []);
 
   const addUnit = async () => {
     if (!newUnit.unit_id || !newUnit.name) return setMsg("Unit ID and name are required!");
-    try {
-      await axios.post(`${SERVER}/api/units`, newUnit);
-      setNewUnit({ unit_id: "", name: "", location: "" });
-      setMsg("✅ Drainage unit added!");
-      loadData();
-    } catch { setMsg("❌ Error adding unit. Unit ID may already exist."); }
+    try { await axios.post(`${SERVER}/api/units`, newUnit); setNewUnit({ unit_id: "", name: "", location: "" }); setMsg("✅ Drainage unit added!"); loadData(); }
+    catch { setMsg("❌ Error adding unit. Unit ID may already exist."); }
   };
 
   const deleteUnit = async (unit_id) => {
     if (!confirm(`Remove ${unit_id}?`)) return;
-    await axios.delete(`${SERVER}/api/units/${unit_id}`);
-    setMsg("✅ Unit removed!");
-    loadData();
+    await axios.delete(`${SERVER}/api/units/${unit_id}`); setMsg("✅ Unit removed!"); loadData();
   };
 
   const addUser = async () => {
     if (!newUser.username || !newUser.password) return setMsg("Username and password required!");
-    try {
-      await axios.post(`${SERVER}/api/users`, newUser);
-      setNewUser({ username: "", password: "", role: "user" });
-      setMsg("✅ User created!");
-      loadData();
-    } catch { setMsg("❌ Error creating user."); }
+    try { await axios.post(`${SERVER}/api/users`, newUser); setNewUser({ username: "", password: "", role: "user" }); setMsg("✅ User created!"); loadData(); }
+    catch { setMsg("❌ Error creating user."); }
   };
 
   const deleteUser = async (id, username) => {
     if (username === user.username) return setMsg("❌ Cannot delete your own account!");
     if (!confirm(`Delete user ${username}?`)) return;
-    await axios.delete(`${SERVER}/api/users/${id}`);
-    setMsg("✅ User deleted!");
-    loadData();
+    await axios.delete(`${SERVER}/api/users/${id}`); setMsg("✅ User deleted!"); loadData();
   };
 
-  const inputStyle = { width: "100%", background: "#0a0f1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px 14px", color: "white", fontSize: "13px" };
-  const btnStyle = (color) => ({ background: color, color: "white", border: "none", borderRadius: "8px", padding: "10px 18px", fontSize: "13px", fontWeight: "600", cursor: "pointer" });
+  const inp = { width: "100%", background: "#0a0f1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px 14px", color: "white", fontSize: "13px" };
+  const btn = (color) => ({ background: color, color: "white", border: "none", borderRadius: "8px", padding: "10px 18px", fontSize: "13px", fontWeight: "600", cursor: "pointer" });
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "white", fontFamily: "'Segoe UI', sans-serif" }}>
       <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
-
-      {/* Navbar */}
       <div style={{ background: "#131929", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: "60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "20px" }}>💧</span>
@@ -133,54 +106,35 @@ function AdminPanel({ user, onLogout }) {
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <span style={{ color: "#475569", fontSize: "13px" }}>👤 {user.username}</span>
-          <button onClick={() => window.location.reload()} style={btnStyle("#1e40af")}>📊 Dashboard</button>
-          <button onClick={onLogout} style={btnStyle("#7f1d1d")}>Logout</button>
+          <button onClick={() => window.location.reload()} style={btn("#1e40af")}>📊 Dashboard</button>
+          <button onClick={onLogout} style={btn("#7f1d1d")}>Logout</button>
         </div>
       </div>
-
       <div style={{ padding: "24px", maxWidth: "900px", margin: "0 auto" }}>
         {msg && <div style={{ background: msg.includes("✅") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${msg.includes("✅") ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, borderRadius: "10px", padding: "12px 16px", marginBottom: "20px", fontSize: "14px", color: msg.includes("✅") ? "#22c55e" : "#ef4444" }}>{msg}</div>}
-
-        {/* Tabs */}
         <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
-          <button onClick={() => setTab("units")} style={{ ...btnStyle(tab === "units" ? "#22c55e" : "#1e293b"), color: tab === "units" ? "#000" : "#94a3b8" }}>🚰 Drainage Units</button>
-          <button onClick={() => setTab("users")} style={{ ...btnStyle(tab === "users" ? "#22c55e" : "#1e293b"), color: tab === "users" ? "#000" : "#94a3b8" }}>👥 Users</button>
+          <button onClick={() => setTab("units")} style={{ ...btn(tab === "units" ? "#22c55e" : "#1e293b"), color: tab === "units" ? "#000" : "#94a3b8" }}>🚰 Drainage Units</button>
+          <button onClick={() => setTab("users")} style={{ ...btn(tab === "users" ? "#22c55e" : "#1e293b"), color: tab === "users" ? "#000" : "#94a3b8" }}>👥 Users</button>
         </div>
 
-        {/* UNITS TAB */}
         {tab === "units" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            {/* Add unit form */}
             <div style={{ background: "#131929", borderRadius: "16px", padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
               <h3 style={{ marginBottom: "16px", fontSize: "15px" }}>➕ Add Drainage Unit</h3>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-                <div>
-                  <label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>UNIT ID (no spaces)</label>
-                  <input value={newUnit.unit_id} onChange={e => setNewUnit({ ...newUnit, unit_id: e.target.value })} placeholder="e.g. drainage_4" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>NAME</label>
-                  <input value={newUnit.name} onChange={e => setNewUnit({ ...newUnit, name: e.target.value })} placeholder="e.g. Drainage 4" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>LOCATION</label>
-                  <input value={newUnit.location} onChange={e => setNewUnit({ ...newUnit, location: e.target.value })} placeholder="e.g. Purok 3" style={inputStyle} />
-                </div>
+                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>UNIT ID (no spaces)</label><input value={newUnit.unit_id} onChange={e => setNewUnit({ ...newUnit, unit_id: e.target.value })} placeholder="e.g. drainage_4" style={inp} /></div>
+                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>NAME</label><input value={newUnit.name} onChange={e => setNewUnit({ ...newUnit, name: e.target.value })} placeholder="e.g. Drainage 4" style={inp} /></div>
+                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>LOCATION</label><input value={newUnit.location} onChange={e => setNewUnit({ ...newUnit, location: e.target.value })} placeholder="e.g. Purok 3" style={inp} /></div>
               </div>
-              <button onClick={addUnit} style={btnStyle("#22c55e")}>Add Unit</button>
+              <button onClick={addUnit} style={btn("#22c55e")}>Add Unit</button>
             </div>
-
-            {/* Units list */}
             <div style={{ background: "#131929", borderRadius: "16px", padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
               <h3 style={{ marginBottom: "16px", fontSize: "15px" }}>🚰 Active Drainage Units ({units.length})</h3>
               {units.length === 0 ? <p style={{ color: "#475569" }}>No units yet.</p> : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {units.map(u => (
                     <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0a0f1e", borderRadius: "10px", padding: "12px 16px" }}>
-                      <div>
-                        <p style={{ fontWeight: "600", fontSize: "14px" }}>{u.name}</p>
-                        <p style={{ color: "#475569", fontSize: "12px" }}>ID: {u.unit_id} {u.location ? `• 📍 ${u.location}` : ""}</p>
-                      </div>
+                      <div><p style={{ fontWeight: "600", fontSize: "14px" }}>{u.name}</p><p style={{ color: "#475569", fontSize: "12px" }}>ID: {u.unit_id} {u.location ? `• 📍 ${u.location}` : ""}</p></div>
                       <button onClick={() => deleteUnit(u.unit_id)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", cursor: "pointer" }}>Remove</button>
                     </div>
                   ))}
@@ -190,33 +144,22 @@ function AdminPanel({ user, onLogout }) {
           </div>
         )}
 
-        {/* USERS TAB */}
         {tab === "users" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            {/* Add user form */}
             <div style={{ background: "#131929", borderRadius: "16px", padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
               <h3 style={{ marginBottom: "16px", fontSize: "15px" }}>➕ Create User Account</h3>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-                <div>
-                  <label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>USERNAME</label>
-                  <input value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} placeholder="e.g. tanod1" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>PASSWORD</label>
-                  <input value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} placeholder="Set password" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>ROLE</label>
-                  <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} style={{ ...inputStyle }}>
+                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>USERNAME</label><input value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} placeholder="e.g. tanod1" style={inp} /></div>
+                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>PASSWORD</label><input value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} placeholder="Set password" style={inp} /></div>
+                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>ROLE</label>
+                  <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} style={inp}>
                     <option value="user">User (View only)</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
               </div>
-              <button onClick={addUser} style={btnStyle("#22c55e")}>Create Account</button>
+              <button onClick={addUser} style={btn("#22c55e")}>Create Account</button>
             </div>
-
-            {/* Users list */}
             <div style={{ background: "#131929", borderRadius: "16px", padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
               <h3 style={{ marginBottom: "16px", fontSize: "15px" }}>👥 All Users ({users.length})</h3>
               {users.length === 0 ? <p style={{ color: "#475569" }}>No users yet.</p> : (
@@ -242,14 +185,8 @@ function AdminPanel({ user, onLogout }) {
   );
 }
 
-// ============================================
-// MAIN DASHBOARD
-// ============================================
 export default function App() {
-  const [user, setUser] = useState(() => {
-    const s = sessionStorage.getItem("drainage_user");
-    return s ? JSON.parse(s) : null;
-  });
+  const [user, setUser] = useState(() => { const s = sessionStorage.getItem("drainage_user"); return s ? JSON.parse(s) : null; });
   const [showAdmin, setShowAdmin] = useState(false);
   const [units, setUnits] = useState([]);
   const [selectedUnit, setSelectedUnit] = useState(null);
@@ -257,6 +194,18 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [connected, setConnected] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); setInstallPrompt(e); });
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === "accepted") setInstallPrompt(null);
+  };
 
   const loadUnit = (unit_id) => {
     axios.get(`${SERVER}/api/latest/${unit_id}`).then(res => {
@@ -275,10 +224,7 @@ export default function App() {
     socket.on("connect", () => setConnected(true));
     socket.on("disconnect", () => setConnected(false));
     socket.on("sensor_update", newData => {
-      if (newData.unit_id === selectedUnit) {
-        setData(newData);
-        setHistory(prev => [...prev.slice(-49), newData]);
-      }
+      if (newData.unit_id === selectedUnit) { setData(newData); setHistory(prev => [...prev.slice(-49), newData]); }
     });
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
@@ -315,6 +261,14 @@ export default function App() {
           {user.role === "admin" && (
             <button className="ubtn" onClick={() => setShowAdmin(true)} style={{ background: "#1e40af", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "600" }}>⚙️ Admin Panel</button>
           )}
+          <button className="ubtn" onClick={() => setIsMobile(!isMobile)} style={{ background: "#1e293b", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "6px 12px", fontSize: "12px" }}>
+            {isMobile ? "🖥️ Desktop" : "📱 Mobile"}
+          </button>
+          {installPrompt && (
+            <button className="ubtn" onClick={handleInstall} style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "600" }}>
+              📲 Install App
+            </button>
+          )}
           <button className="ubtn" onClick={handleLogout} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", cursor: "pointer" }}>Logout</button>
         </div>
       </div>
@@ -332,22 +286,16 @@ export default function App() {
       {/* Content */}
       <div style={{ padding: isMobile ? "16px" : "24px 32px", maxWidth: "1200px", margin: "0 auto" }}>
         <p style={{ fontSize: "12px", color: "#22c55e", marginBottom: "16px" }}>📊 Now viewing: <strong>{getUnitName(selectedUnit)}</strong></p>
-
-        {/* Cards */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
           <div style={cardStyle}>
             <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px", fontWeight: "600" }}>DEBRIS LEVEL</p>
             <p style={{ fontSize: isMobile ? "32px" : "40px", fontWeight: "800", color: getDebrisColor(data.debris_level), lineHeight: 1, marginBottom: "10px" }}>{data.debris_level ?? 0}%</p>
-            <div style={{ background: "#1e293b", borderRadius: "99px", height: "6px" }}>
-              <div style={{ background: getDebrisColor(data.debris_level), height: "6px", borderRadius: "99px", width: `${data.debris_level ?? 0}%`, transition: "width 0.6s" }}></div>
-            </div>
+            <div style={{ background: "#1e293b", borderRadius: "99px", height: "6px" }}><div style={{ background: getDebrisColor(data.debris_level), height: "6px", borderRadius: "99px", width: `${data.debris_level ?? 0}%`, transition: "width 0.6s" }}></div></div>
           </div>
           <div style={cardStyle}>
             <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px", fontWeight: "600" }}>BATTERY {getBatteryIcon(data.battery)}</p>
             <p style={{ fontSize: isMobile ? "32px" : "40px", fontWeight: "800", color: data.battery > 20 ? "#22c55e" : "#ef4444", lineHeight: 1, marginBottom: "10px" }}>{data.battery ?? 0}%</p>
-            <div style={{ background: "#1e293b", borderRadius: "99px", height: "6px" }}>
-              <div style={{ background: data.battery > 20 ? "#22c55e" : "#ef4444", height: "6px", borderRadius: "99px", width: `${data.battery ?? 0}%`, transition: "width 0.6s" }}></div>
-            </div>
+            <div style={{ background: "#1e293b", borderRadius: "99px", height: "6px" }}><div style={{ background: data.battery > 20 ? "#22c55e" : "#ef4444", height: "6px", borderRadius: "99px", width: `${data.battery ?? 0}%`, transition: "width 0.6s" }}></div></div>
           </div>
           <div style={{ ...cardStyle, background: data.overflow ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.07)", border: `1px solid ${data.overflow ? "rgba(239,68,68,0.3)" : "rgba(34,197,94,0.2)"}` }}>
             <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px", fontWeight: "600" }}>OVERFLOW</p>
@@ -363,8 +311,6 @@ export default function App() {
             </div>
           </div>
         </div>
-
-        {/* Chart */}
         <div style={cardStyle}>
           <p style={{ fontWeight: "700", marginBottom: "16px" }}>Debris History — {getUnitName(selectedUnit)}</p>
           {history.length === 0 ? (

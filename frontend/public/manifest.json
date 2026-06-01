@@ -1,0 +1,17 @@
+{
+  "name": "Smart Drainage Monitor",
+  "short_name": "SmartDrainage",
+  "description": "Real-time drainage monitoring system",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f1e",
+  "theme_color": "#22c55e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
