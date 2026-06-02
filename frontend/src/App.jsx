@@ -196,7 +196,16 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [overflowAlert, setOverflowAlert] = useState(false);
 
+  // Clock
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // PWA install
   useEffect(() => {
     window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); setInstallPrompt(e); });
   }, []);
@@ -225,19 +234,46 @@ export default function App() {
     socket.on("connect", () => setConnected(true));
     socket.on("disconnect", () => setConnected(false));
     socket.on("sensor_update", newData => {
-      if (newData.unit_id === selectedUnit) { setData(newData); setHistory(prev => [...prev.slice(-49), newData]); }
+      if (newData.unit_id === selectedUnit) {
+        setData(newData);
+        setHistory(prev => [...prev.slice(-49), newData]);
+        if (newData.overflow) {
+          setOverflowAlert(true);
+          // Play alert sound
+          try {
+            const ctx = new AudioContext();
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            oscillator.frequency.value = 880;
+            oscillator.type = "square";
+            gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.5);
+          } catch(e) {}
+        } else {
+          setOverflowAlert(false);
+        }
+      }
     });
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
     return () => { socket.off("sensor_update"); window.removeEventListener("resize", handleResize); };
-  }, [user]);
+  }, [user, selectedUnit]);
 
   const handleLogout = () => { sessionStorage.removeItem("drainage_user"); setUser(null); };
-  const switchUnit = (unit_id) => { setSelectedUnit(unit_id); loadUnit(unit_id); };
+  const switchUnit = (unit_id) => { setSelectedUnit(unit_id); loadUnit(unit_id); setOverflowAlert(false); };
   const getLedColor = (s) => s === "RED" ? "#ef4444" : s === "YELLOW" ? "#f59e0b" : "#22c55e";
   const getDebrisColor = (l) => l > 70 ? "#ef4444" : l > 40 ? "#f59e0b" : "#22c55e";
   const getBatteryIcon = (b) => b > 60 ? "🔋" : b > 20 ? "🪫" : "⚠️";
   const getUnitName = (uid) => { const u = units.find(x => x.unit_id === uid); return u ? u.name : uid; };
+  const getUnitLocation = (uid) => { const u = units.find(x => x.unit_id === uid); return u && u.location ? u.location : null; };
+
+  const formatDate = (date) => date.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const formatTime = (date) => date.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const formatChartTime = (ts) => { try { return new Date(ts).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
 
   if (!user) return <LoginPage onLogin={setUser} />;
   if (showAdmin && user.role === "admin") return <AdminPanel user={user} onLogout={handleLogout} />;
@@ -246,7 +282,15 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "white", fontFamily: "'Segoe UI', sans-serif", paddingBottom: "40px" }}>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}} *{box-sizing:border-box;margin:0;padding:0} .ubtn{border:none;cursor:pointer;transition:all 0.2s} .ubtn:hover{transform:translateY(-1px)}`}</style>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}} @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}} *{box-sizing:border-box;margin:0;padding:0} .ubtn{border:none;cursor:pointer;transition:all 0.2s} .ubtn:hover{transform:translateY(-1px)}`}</style>
+
+      {/* Overflow Alert Banner */}
+      {overflowAlert && (
+        <div style={{ background: "#ef4444", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", animation: "blink 1s infinite" }}>
+          <p style={{ fontWeight: "700", fontSize: "15px" }}>⚠️ OVERFLOW DETECTED — {getUnitName(selectedUnit)} {getUnitLocation(selectedUnit) ? `• 📍 ${getUnitLocation(selectedUnit)}` : ""} — Immediate attention required!</p>
+          <button onClick={() => setOverflowAlert(false)} style={{ background: "rgba(0,0,0,0.2)", border: "none", color: "white", borderRadius: "6px", padding: "4px 10px", cursor: "pointer", fontSize: "13px" }}>Dismiss</button>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ background: "linear-gradient(135deg, #0f2027, #203a43, #2c5364)", padding: isMobile ? "16px" : "0 32px", height: isMobile ? "auto" : "64px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -255,6 +299,11 @@ export default function App() {
           <p style={{ fontSize: "11px", color: "#94a3b8" }}>👤 {user.username} • {user.role === "admin" ? "⭐ Admin" : "View only"}</p>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          {/* Date and Time */}
+          <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "4px 12px", textAlign: "right" }}>
+            <p style={{ fontSize: "13px", fontWeight: "700", color: "white" }}>{formatTime(currentTime)}</p>
+            <p style={{ fontSize: "10px", color: "#64748b" }}>{formatDate(currentTime)}</p>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", background: connected ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", border: `1px solid ${connected ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, borderRadius: "99px", padding: "4px 10px", fontSize: "12px", color: connected ? "#22c55e" : "#ef4444" }}>
             <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: connected ? "#22c55e" : "#ef4444", animation: connected ? "pulse 2s infinite" : "none" }}></div>
             {connected ? "Live" : "Offline"}
@@ -284,7 +333,17 @@ export default function App() {
 
       {/* Content */}
       <div style={{ padding: isMobile ? "16px" : "24px 32px", maxWidth: "1200px", margin: "0 auto" }}>
-        <p style={{ fontSize: "12px", color: "#22c55e", marginBottom: "16px" }}>📊 Now viewing: <strong>{getUnitName(selectedUnit)}</strong></p>
+
+        {/* Unit info bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
+          <div>
+            <p style={{ fontSize: "12px", color: "#22c55e" }}>📊 Now viewing: <strong>{getUnitName(selectedUnit)}</strong></p>
+            {getUnitLocation(selectedUnit) && <p style={{ fontSize: "11px", color: "#475569", marginTop: "2px" }}>📍 Location: {getUnitLocation(selectedUnit)}</p>}
+          </div>
+          <p style={{ fontSize: "11px", color: "#334155" }}>Last updated: {data.timestamp ? new Date(data.timestamp).toLocaleString("en-PH") : "—"}</p>
+        </div>
+
+        {/* Cards */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
           <div style={cardStyle}>
             <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px", fontWeight: "600" }}>DEBRIS LEVEL</p>
@@ -310,6 +369,8 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Chart */}
         <div style={cardStyle}>
           <p style={{ fontWeight: "700", marginBottom: "16px" }}>Debris History — {getUnitName(selectedUnit)}</p>
           {history.length === 0 ? (
@@ -317,14 +378,13 @@ export default function App() {
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={history}>
-                <XAxis dataKey="timestamp" hide />
+                <XAxis dataKey="timestamp" tickFormatter={formatChartTime} tick={{ fill: "#475569", fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis domain={[0, 100]} stroke="#1e293b" tick={{ fill: "#475569", fontSize: 10 }} width={28} />
-                <Tooltip contentStyle={{ background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: "8px", fontSize: "12px" }} labelFormatter={() => ""} formatter={v => [`${v}%`, "Debris"]} />
+                <Tooltip contentStyle={{ background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: "8px", fontSize: "12px" }} labelFormatter={(ts) => new Date(ts).toLocaleString("en-PH")} formatter={v => [`${v}%`, "Debris"]} />
                 <Line type="monotone" dataKey="debris_level" stroke="#22c55e" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           )}
-          <p style={{ fontSize: "11px", color: "#334155", textAlign: "right", marginTop: "8px" }}>Last updated: {data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : "—"}</p>
         </div>
       </div>
 
@@ -336,8 +396,6 @@ export default function App() {
               <h2 style={{ fontSize: "18px", fontWeight: "700" }}>📲 Install Smart Drainage App</h2>
               <button onClick={() => setShowInstall(false)} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "22px", cursor: "pointer" }}>✕</button>
             </div>
-
-            {/* Android */}
             <div style={{ background: "#0a0f1e", borderRadius: "12px", padding: "16px", marginBottom: "12px", border: "1px solid rgba(34,197,94,0.2)" }}>
               <p style={{ fontWeight: "700", marginBottom: "10px", color: "#22c55e", fontSize: "14px" }}>🤖 Android (Chrome)</p>
               <ol style={{ paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: "#94a3b8" }}>
@@ -353,8 +411,6 @@ export default function App() {
                 </button>
               )}
             </div>
-
-            {/* iPhone */}
             <div style={{ background: "#0a0f1e", borderRadius: "12px", padding: "16px", border: "1px solid rgba(255,255,255,0.06)" }}>
               <p style={{ fontWeight: "700", marginBottom: "10px", color: "#94a3b8", fontSize: "14px" }}>🍎 iPhone (Safari)</p>
               <ol style={{ paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: "#94a3b8" }}>
@@ -365,10 +421,7 @@ export default function App() {
                 <li>Tap <strong style={{ color: "white" }}>"Add"</strong> ✅</li>
               </ol>
             </div>
-
-            <p style={{ fontSize: "11px", color: "#334155", textAlign: "center", marginTop: "16px" }}>
-              Once installed, it works like a real app — no app store needed!
-            </p>
+            <p style={{ fontSize: "11px", color: "#334155", textAlign: "center", marginTop: "16px" }}>Once installed, it works like a real app — no app store needed!</p>
           </div>
         </div>
       )}
