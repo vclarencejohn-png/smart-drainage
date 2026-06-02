@@ -1,11 +1,23 @@
+const CACHE_NAME = 'smart-drainage-v1';
+
+// Install event
+self.addEventListener('install', event => {
+  self.skipWaiting();
+});
+
+// Activate event
+self.addEventListener('activate', event => {
+  event.waitUntil(self.clients.claim());
+});
+
+// Push notification event
 self.addEventListener('push', event => {
   const data = event.data.json();
   
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/icon.png',
-      badge: '/badge.png',
+      icon: '/favicon.svg',
       tag: 'drainage-alert',
       requireInteraction: true,
       actions: [
@@ -16,6 +28,7 @@ self.addEventListener('push', event => {
   );
 });
 
+// Notification click event
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   if (event.action === 'open' || !event.action) {
