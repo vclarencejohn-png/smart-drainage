@@ -18,6 +18,70 @@ const supabase = createClient(
 );
 
 // ============================================
+// DEVICE STATUS TRACKING
+// ============================================
+const deviceStatus = new Map(); // unit_id -> { lastSeen: timestamp, lastBattery: number }
+
+function updateDeviceStatus(unit_id, battery) {
+  deviceStatus.set(unit_id, {
+    lastSeen: new Date().toISOString(),
+    lastBattery: battery
+  });
+}
+
+function getDeviceStatus(unit_id) {
+  const status = deviceStatus.get(unit_id);
+  if (!status) return { online: false, lastSeen: null, lastBattery: null };
+  
+  const secondsAgo = (Date.now() - new Date(status.lastSeen).getTime()) / 1000;
+  const isOnline = secondsAgo < 30; // Offline if no data for 30+ seconds
+  
+  return {
+    online: isOnline,
+    lastSeen: status.lastSeen,
+    lastBattery: status.lastBattery
+  };
+}
+
+// Cleanup old entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  deviceStatus.forEach((status, unit_id) => {
+    if (now - new Date(status.lastSeen).getTime() > 300000) { // 5 minutes
+      deviceStatus.delete(unit_id);
+    }
+  });
+}, 300000);
+
+// ============================================
+// PUSH NOTIFICATION SETUP
+// ============================================
+const webpush = require('web-push');
+
+// REPLACE THESE WITH YOUR KEYS (we'll generate next)
+webpush.setVapidDetails(
+  'mailto:vclarencejohn@gmail.com',
+  'YOUR_PUBLIC_KEY_HERE',
+  'YOUR_PRIVATE_KEY_HERE'
+);
+
+// Store push subscriptions
+const pushSubscriptions = new Map();
+
+function sendPushNotification(unit_id, title, body) {
+  const subscription = pushSubscriptions.get(unit_id);
+  if (!subscription) {
+    console.log(`No push subscription for ${unit_id}`);
+    return;
+  }
+  
+  const payload = JSON.stringify({ title, body, icon: '/icon.png' });
+  
+  webpush.sendNotification(subscription, payload)
+    .catch(err => console.error('Push error:', err));
+}
+
+// ============================================
 // AUTH ROUTES
 // ============================================
 
@@ -112,6 +176,9 @@ app.delete('/api/units/:unit_id', async (req, res) => {
 app.post('/api/data', async (req, res) => {
   const { unit_id = 'drainage_1', debris_level, overflow, led_status, battery } = req.body;
 
+  // Update device status when data arrives
+  updateDeviceStatus(unit_id, battery);
+
   const { error } = await supabase
     .from('readings')
     .insert([{ unit_id, debris_level, overflow, led_status, battery }]);
@@ -120,6 +187,22 @@ app.post('/api/data', async (req, res) => {
 
   const entry = { unit_id, debris_level, overflow, led_status, battery, timestamp: new Date().toISOString() };
   io.emit('sensor_update', entry);
+
+  // NEW: Push notification for BOTH overflow AND full drainage
+  const isCritical = overflow || (debris_level >= 95);
+  if (isCritical) {
+    const alertType = overflow ? 'OVERFLOW' : 'DRAINAGE FULL';
+    const message = overflow 
+      ? `Drainage ${unit_id} detected overflow! Immediate attention required.`
+      : `Drainage ${unit_id} is FULL (${debris_level}%)! Clear debris now.`;
+    
+    // Send push notification
+    sendPushNotification(unit_id, `⚠️ ${alertType} ALERT`, message);
+    
+    // Emit critical alert for frontend alarm
+    io.emit('critical_alert', { unit_id, type: alertType, debris_level, message });
+  }
+
   console.log(`[${unit_id}] Data received:`, req.body);
   res.json({ status: 'ok' });
 });
@@ -147,6 +230,20 @@ app.get('/api/history/:unit_id', async (req, res) => {
     .limit(50);
   if (error) return res.json([]);
   res.json(data.reverse());
+});
+
+// NEW: Get device status for a unit
+app.get('/api/status/:unit_id', (req, res) => {
+  const status = getDeviceStatus(req.params.unit_id);
+  res.json(status);
+});
+
+// NEW: Save push subscription from frontend
+app.post('/api/subscribe', (req, res) => {
+  const { unit_id, subscription } = req.body;
+  pushSubscriptions.set(unit_id, subscription);
+  console.log(`Push subscription saved for ${unit_id}`);
+  res.json({ success: true });
 });
 
 const PORT = process.env.PORT || 3001;
