@@ -61,8 +61,8 @@ const webpush = require('web-push');
 // REPLACE THESE WITH YOUR KEYS (we'll generate next)
 webpush.setVapidDetails(
   'mailto:vclarencejohn@gmail.com',
-  'YOUR_PUBLIC_KEY_HERE',
-  'YOUR_PRIVATE_KEY_HERE'
+  'BAZkHc3m_P6t94MBIqsFtJeMfORm_6gZcgxKmqOkE_pI8v-VqTUYL8vMRIyLsBu_EBgotADYUmXCflkVGPcEqnU',
+  'Fq5HyDC-y41H4CT8AuKdocPpmOCBYbVtUU75oxfG8go'
 );
 
 // Store push subscriptions
