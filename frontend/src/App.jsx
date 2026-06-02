@@ -1,10 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";  // NEW: added useCallback
 import { io } from "socket.io-client";
 import axios from "axios";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const SERVER = "https://smart-drainage-production.up.railway.app";
 const socket = io(SERVER);
+
+// NEW: Device status checker - returns status object
+const getDeviceStatusInfo = (lastSeen, lastBattery) => {
+  if (!lastSeen) return { text: "No Data", color: "#ef4444", bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.3)", dot: "#ef4444", pulse: false };
+  const secondsAgo = (Date.now() - new Date(lastSeen).getTime()) / 1000;
+  if (secondsAgo > 30) {
+    // Offline - check if low battery was the last known state
+    if (lastBattery !== undefined && lastBattery < 20) {
+      return { text: "Low Battery", color: "#f59e0b", bg: "rgba(245,158,11,0.15)", border: "rgba(245,158,11,0.3)", dot: "#f59e0b", pulse: false };
+    }
+    return { text: "Offline", color: "#ef4444", bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.3)", dot: "#ef4444", pulse: false };
+  }
+  return { text: "Live", color: "#22c55e", bg: "rgba(34,197,94,0.15)", border: "rgba(34,197,94,0.3)", dot: "#22c55e", pulse: true };
+};
 
 function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
@@ -193,11 +207,13 @@ export default function App() {
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [data, setData] = useState({ debris_level: 0, overflow: 0, led_status: "GREEN", battery: 100 });
   const [history, setHistory] = useState([]);
-  const [connected, setConnected] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [overflowAlert, setOverflowAlert] = useState(false);
+  
+  // NEW: Device status tracking per unit
+  const [deviceStatus, setDeviceStatus] = useState({}); // { unit_id: { lastSeen: timestamp, lastBattery: number } }
 
   // Clock
   useEffect(() => {
@@ -225,21 +241,57 @@ export default function App() {
     axios.get(`${SERVER}/api/history/${unit_id}`).then(res => setHistory(res.data));
   };
 
+  // NEW: Check device status for all units
+  const checkAllDeviceStatus = useCallback(async () => {
+    if (!units.length) return;
+    const newStatus = {};
+    for (const unit of units) {
+      try {
+        const res = await axios.get(`${SERVER}/api/status/${unit.unit_id}`);
+        newStatus[unit.unit_id] = {
+          lastSeen: res.data.lastSeen,
+          lastBattery: res.data.lastBattery,
+          online: res.data.online
+        };
+      } catch (e) {
+        newStatus[unit.unit_id] = { lastSeen: null, lastBattery: null, online: false };
+      }
+    }
+    setDeviceStatus(newStatus);
+  }, [units]);
+
+  // NEW: Poll device status every 5 seconds
+  useEffect(() => {
+    if (!user || !units.length) return;
+    checkAllDeviceStatus();
+    const interval = setInterval(checkAllDeviceStatus, 5000);
+    return () => clearInterval(interval);
+  }, [user, units, checkAllDeviceStatus]);
+
   useEffect(() => {
     if (!user) return;
     axios.get(`${SERVER}/api/units`).then(res => {
       setUnits(res.data);
       if (res.data.length > 0) { setSelectedUnit(res.data[0].unit_id); loadUnit(res.data[0].unit_id); }
     });
-    socket.on("connect", () => setConnected(true));
-    socket.on("disconnect", () => setConnected(false));
+    
+    // NEW: Also update device status when new data arrives via socket
     socket.on("sensor_update", newData => {
+      // Update device status for this unit
+      setDeviceStatus(prev => ({
+        ...prev,
+        [newData.unit_id]: {
+          lastSeen: newData.timestamp || new Date().toISOString(),
+          lastBattery: newData.battery,
+          online: true
+        }
+      }));
+      
       if (newData.unit_id === selectedUnit) {
         setData(newData);
         setHistory(prev => [...prev.slice(-49), newData]);
         if (newData.overflow) {
           setOverflowAlert(true);
-          // Play alert sound
           try {
             const ctx = new AudioContext();
             const oscillator = ctx.createOscillator();
@@ -258,6 +310,7 @@ export default function App() {
         }
       }
     });
+    
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
     return () => { socket.off("sensor_update"); window.removeEventListener("resize", handleResize); };
@@ -274,6 +327,10 @@ export default function App() {
   const formatDate = (date) => date.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const formatTime = (date) => date.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const formatChartTime = (ts) => { try { return new Date(ts).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
+
+  // NEW: Get status for currently selected unit
+  const currentStatus = deviceStatus[selectedUnit] || { lastSeen: null, lastBattery: null };
+  const statusInfo = getDeviceStatusInfo(currentStatus.lastSeen, currentStatus.lastBattery);
 
   if (!user) return <LoginPage onLogin={setUser} />;
   if (showAdmin && user.role === "admin") return <AdminPanel user={user} onLogout={handleLogout} />;
@@ -304,10 +361,13 @@ export default function App() {
             <p style={{ fontSize: "13px", fontWeight: "700", color: "white" }}>{formatTime(currentTime)}</p>
             <p style={{ fontSize: "10px", color: "#64748b" }}>{formatDate(currentTime)}</p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: connected ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", border: `1px solid ${connected ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, borderRadius: "99px", padding: "4px 10px", fontSize: "12px", color: connected ? "#22c55e" : "#ef4444" }}>
-            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: connected ? "#22c55e" : "#ef4444", animation: connected ? "pulse 2s infinite" : "none" }}></div>
-            {connected ? "Live" : "Offline"}
+          
+          {/* NEW: Device Status Badge (replaces old "Live/Offline" badge) */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: statusInfo.bg, border: `1px solid ${statusInfo.border}`, borderRadius: "99px", padding: "4px 10px", fontSize: "12px", color: statusInfo.color }}>
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: statusInfo.dot, animation: statusInfo.pulse ? "pulse 2s infinite" : "none" }}></div>
+            {statusInfo.text}
           </div>
+          
           {user.role === "admin" && (
             <button className="ubtn" onClick={() => setShowAdmin(true)} style={{ background: "#1e40af", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "600" }}>⚙️ Admin Panel</button>
           )}
@@ -321,30 +381,40 @@ export default function App() {
         </div>
       </div>
 
-      {/* Unit selector */}
+      {/* Unit selector - NEW: Status dots on buttons */}
       <div style={{ padding: isMobile ? "12px" : "16px 32px", background: "#131929", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: "8px", overflowX: "auto" }}>
-        {units.map(u => (
-          <button key={u.unit_id} className="ubtn" onClick={() => switchUnit(u.unit_id)}
-            style={{ background: selectedUnit === u.unit_id ? "#22c55e" : "rgba(255,255,255,0.06)", color: selectedUnit === u.unit_id ? "#000" : "#94a3b8", border: `1px solid ${selectedUnit === u.unit_id ? "#22c55e" : "rgba(255,255,255,0.06)"}`, borderRadius: "99px", padding: "6px 16px", fontSize: "13px", fontWeight: selectedUnit === u.unit_id ? "700" : "400", whiteSpace: "nowrap" }}>
-            📍 {u.name}
-          </button>
-        ))}
+        {units.map(u => {
+          const uStatus = deviceStatus[u.unit_id] || { lastSeen: null, lastBattery: null };
+          const uInfo = getDeviceStatusInfo(uStatus.lastSeen, uStatus.lastBattery);
+          return (
+            <button key={u.unit_id} className="ubtn" onClick={() => switchUnit(u.unit_id)}
+              style={{ background: selectedUnit === u.unit_id ? "#22c55e" : "rgba(255,255,255,0.06)", color: selectedUnit === u.unit_id ? "#000" : "#94a3b8", border: `1px solid ${selectedUnit === u.unit_id ? "#22c55e" : "rgba(255,255,255,0.06)"}`, borderRadius: "99px", padding: "6px 16px", fontSize: "13px", fontWeight: selectedUnit === u.unit_id ? "700" : "400", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: uInfo.dot, flexShrink: 0 }}></div>
+              📍 {u.name}
+            </button>
+          );
+        })}
       </div>
 
       {/* Content */}
       <div style={{ padding: isMobile ? "16px" : "24px 32px", maxWidth: "1200px", margin: "0 auto" }}>
 
-        {/* Unit info bar */}
+        {/* Unit info bar - NEW: Show offline warning */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
           <div>
-            <p style={{ fontSize: "12px", color: "#22c55e" }}>📊 Now viewing: <strong>{getUnitName(selectedUnit)}</strong></p>
+            <p style={{ fontSize: "12px", color: statusInfo.text === "Live" ? "#22c55e" : "#ef4444" }}>
+              📊 Now viewing: <strong>{getUnitName(selectedUnit)}</strong>
+              {statusInfo.text !== "Live" && <span style={{ marginLeft: "8px", fontSize: "11px" }}>• {statusInfo.text}</span>}
+            </p>
             {getUnitLocation(selectedUnit) && <p style={{ fontSize: "11px", color: "#475569", marginTop: "2px" }}>📍 Location: {getUnitLocation(selectedUnit)}</p>}
           </div>
-          <p style={{ fontSize: "11px", color: "#334155" }}>Last updated: {data.timestamp ? new Date(data.timestamp).toLocaleString("en-PH") : "—"}</p>
+          <p style={{ fontSize: "11px", color: "#334155" }}>
+            Last updated: {currentStatus.lastSeen ? new Date(currentStatus.lastSeen).toLocaleString("en-PH") : "—"}
+          </p>
         </div>
 
-        {/* Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
+        {/* Cards - NEW: Dim cards when offline */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "12px", marginBottom: "16px", opacity: statusInfo.text === "Live" ? 1 : 0.6 }}>
           <div style={cardStyle}>
             <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px", fontWeight: "600" }}>DEBRIS LEVEL</p>
             <p style={{ fontSize: isMobile ? "32px" : "40px", fontWeight: "800", color: getDebrisColor(data.debris_level), lineHeight: 1, marginBottom: "10px" }}>{data.debris_level ?? 0}%</p>
