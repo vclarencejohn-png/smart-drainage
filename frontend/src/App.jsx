@@ -495,70 +495,69 @@ function App() {
       }
     } catch (e) { alert('Error adding unit'); }
   };
-  const createUnit = async () => {
-  try {
-    const res = await fetch(`${API_URL}/api/units`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUnit)
-    });
-    const data = await res.json();
-    if (data.success) {
-      setAddUnitModal(false);
-      setNewUnit({ unit_id: '', name: '', location: '' });
-      fetchUnits();
-    } else {
-      alert('Failed to add unit');
-    }
-  } catch (e) { alert('Error adding unit'); }
-};
+    const createUnit = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/units`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUnit)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAddUnitModal(false);
+        setNewUnit({ unit_id: '', name: '', location: '' });
+        fetchUnits();
+      } else {
+        alert('Failed to add unit');
+      }
+    } catch (e) { alert('Error adding unit'); }
+  };
 
-// ADD THESE TWO FUNCTIONS HERE
-const deleteUser = async (username) => {
-  if (!username) return;
-  if (username === user?.username) {
-    alert('You cannot delete your own account!');
-    return;
-  }
-  if (!window.confirm(`Are you sure you want to delete user "${username}"?`)) return;
-  
-  try {
-    const res = await fetch(`${API_URL}/api/users/${encodeURIComponent(username)}`, {
-      method: 'DELETE'
-    });
-    const data = await res.json();
-    if (data.success) {
-      fetchUsers();
-      alert('User deleted successfully');
-    } else {
-      alert('Failed to delete user: ' + (data.error || 'Unknown error'));
+  const deleteUser = async (username) => {
+    if (!username) return;
+    if (username === user?.username) {
+      alert('You cannot delete your own account!');
+      return;
     }
-  } catch (e) {
-    console.error('Delete user error:', e);
-    alert('Error deleting user');
-  }
-};
+    if (!window.confirm(`Are you sure you want to delete user "${username}"?`)) return;
+    
+    try {
+      const res = await fetch(`${API_URL}/api/users/${encodeURIComponent(username)}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchUsers();
+        alert('User deleted successfully');
+      } else {
+        alert('Failed to delete user: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('Delete user error:', e);
+      alert('Error deleting user');
+    }
+  };
 
-const deleteUnit = async (unitId) => {
-  if (!unitId) return;
-  if (!window.confirm(`Are you sure you want to delete unit "${unitId}"? This will also delete all its data!`)) return;
-  
-  try {
-    const res = await fetch(`${API_URL}/api/units/${encodeURIComponent(unitId)}`, {
-      method: 'DELETE'
-    });
-    const data = await res.json();
-    if (data.success) {
-      fetchUnits();
-      alert('Unit deleted successfully');
-    } else {
-      alert('Failed to delete unit: ' + (data.error || 'Unknown error'));
+  const deleteUnit = async (unitId) => {
+    if (!unitId) return;
+    if (!window.confirm(`Are you sure you want to delete unit "${unitId}"?`)) return;
+    
+    try {
+      const res = await fetch(`${API_URL}/api/units/${encodeURIComponent(unitId)}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchUnits();
+        alert('Unit deleted successfully');
+      } else {
+        alert('Failed to delete unit: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('Delete unit error:', e);
+      alert('Error deleting unit');
     }
-  } catch (e) {
-    console.error('Delete unit error:', e);
-    alert('Error deleting unit');
-  }
-};
+  };
 
   const downloadCSV = () => {
     if (!Array.isArray(historyData) || historyData.length === 0) return;
