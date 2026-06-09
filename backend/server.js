@@ -235,3 +235,17 @@ app.post('/api/heartbeat', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// ========== USERS ==========
+app.get('/api/users', async (req, res) => {
+  const { data, error } = await supabase.from('users').select('username, role, unit_id');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/users', async (req, res) => {
+  const { username, password, role, unit_id } = req.body;
+  const { error } = await supabase.from('users').insert([{ username, password, role, unit_id }]);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});

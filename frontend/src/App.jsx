@@ -17,159 +17,55 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 
 const API_URL = 'https://smart-drainage-production.up.railway.app';
 const SOCKET_URL = 'wss://smart-drainage-production.up.railway.app';
-const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 1 hour
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000;
 
-// ========== VAPID KEY (Replace with your actual key) ==========
-const VAPID_PUBLIC_KEY = 'BLxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+const VAPID_PUBLIC_KEY = 'BM9CHUWgQEjHXyL4KSxd_f3G2hVoj99fw_9TojPGjJAd5HXCGBEkXPWD8KgdRbmakpFiGWAe7X5qr3szhOi6uTM';
 
-// ========== TRANSLATIONS ==========
 const translations = {
   en: {
-    login: 'Login',
-    username: 'Username',
-    password: 'Password',
-    rememberMe: 'Remember Me',
-    dashboard: 'Dashboard',
-    drainageStatus: 'Drainage Status',
-    debrisLevel: 'Debris Level',
-    overflow: 'Overflow',
-    ledStatus: 'LED Status',
-    battery: 'Battery',
-    deviceStatus: 'Device Status',
-    live: 'Live',
-    offline: 'Offline',
-    maintenance: 'Maintenance',
-    startMaintenance: '🔧 Start Maintenance',
-    endMaintenance: '✅ End Maintenance',
-    underMaintenance: '🔧 Under Maintenance',
-    maintenanceBy: 'By',
-    maintenanceReason: 'Reason',
-    history: 'History',
-    downloadCSV: 'Download CSV',
-    downloadPDF: 'Download PDF',
-    notifications: 'Notifications',
-    loginHistory: 'Login History',
-    settings: 'Settings',
-    darkMode: 'Dark Mode',
-    lightMode: 'Light Mode',
-    language: 'Language',
-    english: 'English',
-    tagalog: 'Tagalog',
-    voiceAlert: 'Voice Alert',
-    enablePush: '🔕 Enable Alerts',
-    disablePush: '🔔 Disable Alerts',
-    logout: 'Logout',
-    willAutoLogout: 'Auto-logout in',
-    minutes: 'minutes',
-    alertOverflow: 'OVERFLOW DETECTED',
-    alertCritical: 'CRITICAL LEVEL',
-    noData: 'No data available',
-    selectUnit: 'Select Unit',
-    adminPanel: 'Admin Panel',
-    users: 'Users',
-    units: 'Units',
-    addUser: 'Add User',
-    addUnit: 'Add Unit',
-    photoUpload: 'Upload Photo',
-    maintenanceNote: 'What is being done?',
-    cancel: 'Cancel',
-    confirm: 'Confirm',
-    done: 'Done',
-    refresh: 'Refresh',
-    dateRange: 'Date Range',
-    from: 'From',
-    to: 'To',
-    filter: 'Filter',
-    all: 'All',
-    type: 'Type',
-    message: 'Message',
-    time: 'Time',
-    sent: 'Sent',
-    ip: 'IP Address',
-    role: 'Role',
-    lastLogin: 'Last Login',
-    normal: 'Normal',
-    warning: 'Warning',
-    critical: 'Critical',
-    emergency: 'Emergency',
+    login: 'Login', username: 'Username', password: 'Password', rememberMe: 'Remember Me',
+    dashboard: 'Dashboard', drainageStatus: 'Drainage Status', debrisLevel: 'Debris Level',
+    overflow: 'Overflow', ledStatus: 'LED Status', battery: 'Battery', deviceStatus: 'Device Status',
+    live: 'Live', offline: 'Offline', maintenance: 'Maintenance', startMaintenance: '🔧 Start Maintenance',
+    endMaintenance: '✅ End Maintenance', underMaintenance: '🔧 Under Maintenance', maintenanceBy: 'By',
+    maintenanceReason: 'Reason', history: 'History', downloadCSV: 'Download CSV', downloadPDF: 'Download PDF',
+    notifications: 'Notifications', loginHistory: 'Login History', settings: 'Settings',
+    darkMode: 'Dark Mode', lightMode: 'Light Mode', language: 'Language', english: 'English',
+    tagalog: 'Tagalog', voiceAlert: 'Voice Alert', enablePush: '🔕 Enable Alerts', disablePush: '🔔 Disable Alerts',
+    logout: 'Logout', willAutoLogout: 'Auto-logout in', minutes: 'minutes', alertOverflow: 'OVERFLOW DETECTED',
+    alertCritical: 'CRITICAL LEVEL', noData: 'No data available', selectUnit: 'Select Unit',
+    adminPanel: 'Admin Panel', users: 'Users', units: 'Units', addUser: 'Add User', addUnit: 'Add Unit',
+    photoUpload: 'Upload Photo', maintenanceNote: 'What is being done?', cancel: 'Cancel', confirm: 'Confirm',
+    done: 'Done', refresh: 'Refresh', dateRange: 'Date Range', from: 'From', to: 'To', filter: 'Filter',
+    all: 'All', type: 'Type', message: 'Message', time: 'Time', sent: 'Sent', ip: 'IP Address', role: 'Role',
+    lastLogin: 'Last Login', normal: 'Normal', warning: 'Warning', critical: 'Critical', emergency: 'Emergency',
   },
   tl: {
-    login: 'Mag-login',
-    username: 'Username',
-    password: 'Password',
-    rememberMe: 'Tandaan Ako',
-    dashboard: 'Dashboard',
-    drainageStatus: 'Status ng Drainage',
-    debrisLevel: 'Antas ng Basura',
-    overflow: 'Umaapaw',
-    ledStatus: 'Status ng LED',
-    battery: 'Baterya',
-    deviceStatus: 'Status ng Device',
-    live: 'Live',
-    offline: 'Offline',
-    maintenance: 'Maintenance',
-    startMaintenance: '🔧 Simulan ang Maintenance',
-    endMaintenance: '✅ Tapos na ang Maintenance',
-    underMaintenance: '🔧 Sa Ilalim ng Maintenance',
-    maintenanceBy: 'Ni',
-    maintenanceReason: 'Dahilan',
-    history: 'Kasaysayan',
-    downloadCSV: 'I-download ang CSV',
-    downloadPDF: 'I-download ang PDF',
-    notifications: 'Mga Abiso',
-    loginHistory: 'Kasaysayan ng Login',
-    settings: 'Mga Setting',
-    darkMode: 'Dark Mode',
-    lightMode: 'Light Mode',
-    language: 'Wika',
-    english: 'English',
-    tagalog: 'Tagalog',
-    voiceAlert: 'Voice Alert',
-    enablePush: '🔕 Buksan ang Alerts',
-    disablePush: '🔔 Isara ang Alerts',
-    logout: 'Mag-logout',
-    willAutoLogout: 'Auto-logout sa',
-    minutes: 'minuto',
-    alertOverflow: 'UMAAPAW ANG DRAINAGE',
-    alertCritical: 'KRITIKAL NA ANG LEVEL',
-    noData: 'Walang datos',
-    selectUnit: 'Pumili ng Unit',
-    adminPanel: 'Admin Panel',
-    users: 'Mga User',
-    units: 'Mga Unit',
-    addUser: 'Magdagdag ng User',
-    addUnit: 'Magdagdag ng Unit',
-    photoUpload: 'Mag-upload ng Litrato',
-    maintenanceNote: 'Ano ang ginagawa?',
-    cancel: 'Kanselahin',
-    confirm: 'Kumpirmahin',
-    done: 'Tapos',
-    refresh: 'I-refresh',
-    dateRange: 'Saklaw ng Petsa',
-    from: 'Mula',
-    to: 'Hanggang',
-    filter: 'I-filter',
-    all: 'Lahat',
-    type: 'Uri',
-    message: 'Mensahe',
-    time: 'Oras',
-    sent: 'Naipadala',
-    ip: 'IP Address',
-    role: 'Role',
-    lastLogin: 'Huling Login',
-    normal: 'Normal',
-    warning: 'Babala',
-    critical: 'Kritikal',
-    emergency: 'Emergency',
+    login: 'Mag-login', username: 'Username', password: 'Password', rememberMe: 'Tandaan Ako',
+    dashboard: 'Dashboard', drainageStatus: 'Status ng Drainage', debrisLevel: 'Antas ng Basura',
+    overflow: 'Umaapaw', ledStatus: 'Status ng LED', battery: 'Baterya', deviceStatus: 'Status ng Device',
+    live: 'Live', offline: 'Offline', maintenance: 'Maintenance', startMaintenance: '🔧 Simulan ang Maintenance',
+    endMaintenance: '✅ Tapos na ang Maintenance', underMaintenance: '🔧 Sa Ilalim ng Maintenance', maintenanceBy: 'Ni',
+    maintenanceReason: 'Dahilan', history: 'Kasaysayan', downloadCSV: 'I-download ang CSV', downloadPDF: 'I-download ang PDF',
+    notifications: 'Mga Abiso', loginHistory: 'Kasaysayan ng Login', settings: 'Mga Setting',
+    darkMode: 'Dark Mode', lightMode: 'Light Mode', language: 'Wika', english: 'English', tagalog: 'Tagalog',
+    voiceAlert: 'Voice Alert', enablePush: '🔕 Buksan ang Alerts', disablePush: '🔔 Isara ang Alerts',
+    logout: 'Mag-logout', willAutoLogout: 'Auto-logout sa', minutes: 'minuto', alertOverflow: 'UMAAPAW ANG DRAINAGE',
+    alertCritical: 'KRITIKAL NA ANG LEVEL', noData: 'Walang datos', selectUnit: 'Pumili ng Unit',
+    adminPanel: 'Admin Panel', users: 'Mga User', units: 'Mga Unit', addUser: 'Magdagdag ng User', addUnit: 'Magdagdag ng Unit',
+    photoUpload: 'Mag-upload ng Litrato', maintenanceNote: 'Ano ang ginagawa?', cancel: 'Kanselahin', confirm: 'Kumpirmahin',
+    done: 'Tapos', refresh: 'I-refresh', dateRange: 'Saklaw ng Petsa', from: 'Mula', to: 'Hanggang', filter: 'I-filter',
+    all: 'Lahat', type: 'Uri', message: 'Mensahe', time: 'Oras', sent: 'Naipadala', ip: 'IP Address', role: 'Role',
+    lastLogin: 'Huling Login', normal: 'Normal', warning: 'Babala', critical: 'Kritikal', emergency: 'Emergency',
   }
 };
 
 function App() {
-  // ========== STATE ==========
   const [user, setUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ username: '', password: '', rememberMe: false });
   const [selectedUnit, setSelectedUnit] = useState('drainage_1');
   const [units, setUnits] = useState([]);
+  const [usersList, setUsersList] = useState([]);
   const [sensorData, setSensorData] = useState(null);
   const [historyData, setHistoryData] = useState([]);
   const [chartData, setChartData] = useState({ labels: [], datasets: [] });
@@ -188,13 +84,16 @@ function App() {
   const [maintenanceReason, setMaintenanceReason] = useState('');
   const [historyFilter, setHistoryFilter] = useState({ startDate: '', endDate: '' });
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [addUserModal, setAddUserModal] = useState(false);
+  const [addUnitModal, setAddUnitModal] = useState(false);
+  const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user', unit_id: '' });
+  const [newUnit, setNewUnit] = useState({ unit_id: '', name: '', location: '' });
   
   const t = translations[lang];
   const inactivityTimer = useRef(null);
   const countdownTimer = useRef(null);
   const socketRef = useRef(null);
 
-  // ========== PERSISTENT LOGIN ==========
   useEffect(() => {
     const savedUser = localStorage.getItem('drainage_user');
     const savedTime = localStorage.getItem('drainage_loginTime');
@@ -213,17 +112,13 @@ function App() {
     }
   }, []);
 
-  // ========== ACTIVITY TRACKER (1 HOUR AUTO-LOGOUT) ==========
   const resetInactivityTimer = useCallback(() => {
     if (!user) return;
-    
     clearTimeout(inactivityTimer.current);
     clearInterval(countdownTimer.current);
-    
     setTimeLeft(INACTIVITY_TIMEOUT);
     
     inactivityTimer.current = setTimeout(() => {
-      // Inline logout to avoid stale closure
       setUser(null);
       setSensorData(null);
       setHistoryData([]);
@@ -248,13 +143,10 @@ function App() {
 
   useEffect(() => {
     if (!user) return;
-    
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
     const handleActivity = () => resetInactivityTimer();
-    
     events.forEach(e => document.addEventListener(e, handleActivity));
     resetInactivityTimer();
-    
     return () => {
       events.forEach(e => document.removeEventListener(e, handleActivity));
       clearTimeout(inactivityTimer.current);
@@ -262,31 +154,24 @@ function App() {
     };
   }, [user, resetInactivityTimer]);
 
-  // ========== OFFLINE DETECTION ==========
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
-  // ========== SOCKET.IO ==========
   useEffect(() => {
     if (!user) return;
-    
     const s = io(SOCKET_URL);
     socketRef.current = s;
     
     s.on('sensorUpdate', (data) => {
-      if (data.unit_id === selectedUnit) {
-        setSensorData(data);
-      }
+      if (data.unit_id === selectedUnit) setSensorData(data);
       setDeviceStatus(prev => ({
         ...prev,
         [data.unit_id]: { status: 'live', lastSeen: new Date().toISOString() }
@@ -316,10 +201,10 @@ function App() {
     return () => s.disconnect();
   }, [user, selectedUnit, voiceAlert]);
 
-  // ========== FETCH INITIAL DATA ==========
   useEffect(() => {
     if (!user) return;
     fetchUnits();
+    fetchUsers();
     fetchSensorData();
     fetchMaintenanceStatus();
     fetchNotificationLog();
@@ -332,15 +217,20 @@ function App() {
     fetchHistory();
   }, [selectedUnit]);
 
-  // ========== FETCH FUNCTIONS ==========
   const fetchUnits = async () => {
     try {
       const res = await fetch(`${API_URL}/api/units`);
       const data = await res.json();
       setUnits(data);
-    } catch (e) {
-      console.error('Fetch units error:', e);
-    }
+    } catch (e) { console.error('Fetch units error:', e); }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/users`);
+      const data = await res.json();
+      setUsersList(data);
+    } catch (e) { console.error('Fetch users error:', e); }
   };
 
   const fetchSensorData = async () => {
@@ -348,9 +238,7 @@ function App() {
       const res = await fetch(`${API_URL}/api/data/${selectedUnit}?limit=1`);
       const data = await res.json();
       if (data.length > 0) setSensorData(data[0]);
-    } catch (e) {
-      console.error('Fetch sensor error:', e);
-    }
+    } catch (e) { console.error('Fetch sensor error:', e); }
   };
 
   const fetchHistory = async () => {
@@ -377,9 +265,7 @@ function App() {
           fill: true,
         }]
       });
-    } catch (e) {
-      console.error('Fetch history error:', e);
-    }
+    } catch (e) { console.error('Fetch history error:', e); }
   };
 
   const fetchMaintenanceStatus = async () => {
@@ -387,9 +273,7 @@ function App() {
       const res = await fetch(`${API_URL}/api/maintenance/status`);
       const data = await res.json();
       setMaintenanceStatus(data);
-    } catch (e) {
-      console.error('Fetch maintenance error:', e);
-    }
+    } catch (e) { console.error('Fetch maintenance error:', e); }
   };
 
   const fetchNotificationLog = async () => {
@@ -397,9 +281,7 @@ function App() {
       const res = await fetch(`${API_URL}/api/notifications/log`);
       const data = await res.json();
       setNotificationLog(data);
-    } catch (e) {
-      console.error('Fetch notifications error:', e);
-    }
+    } catch (e) { console.error('Fetch notifications error:', e); }
   };
 
   const fetchLoginHistory = async () => {
@@ -407,12 +289,9 @@ function App() {
       const res = await fetch(`${API_URL}/api/login-history`);
       const data = await res.json();
       setLoginHistory(data);
-    } catch (e) {
-      console.error('Fetch login history error:', e);
-    }
+    } catch (e) { console.error('Fetch login history error:', e); }
   };
 
-  // ========== AUTH FUNCTIONS ==========
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -431,9 +310,7 @@ function App() {
       } else {
         alert('Invalid credentials!');
       }
-    } catch (e) {
-      alert('Login failed!');
-    }
+    } catch (e) { alert('Login failed!'); }
   };
 
   const handleLogout = () => {
@@ -446,7 +323,6 @@ function App() {
     if (socketRef.current) socketRef.current.disconnect();
   };
 
-  // ========== ALERT FUNCTIONS ==========
   const addAlert = (message, type) => {
     const id = Date.now();
     setAlerts(prev => [...prev, { id, message, type, time: new Date().toLocaleTimeString() }]);
@@ -463,7 +339,6 @@ function App() {
     }
   };
 
-  // ========== PUSH NOTIFICATIONS ==========
   const togglePush = async () => {
     if (!pushEnabled) {
       try {
@@ -484,9 +359,7 @@ function App() {
           setPushEnabled(true);
           localStorage.setItem('drainage_push', 'true');
         }
-      } catch (e) {
-        console.error('Push error:', e);
-      }
+      } catch (e) { console.error('Push error:', e); }
     } else {
       setPushEnabled(false);
       localStorage.removeItem('drainage_push');
@@ -500,7 +373,6 @@ function App() {
     return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
   };
 
-  // ========== MAINTENANCE FUNCTIONS ==========
   const startMaintenance = async () => {
     try {
       await fetch(`${API_URL}/api/maintenance/start`, {
@@ -515,9 +387,7 @@ function App() {
       setMaintenanceModal(false);
       setMaintenanceReason('');
       fetchMaintenanceStatus();
-    } catch (e) {
-      alert('Failed to start maintenance');
-    }
+    } catch (e) { alert('Failed to start maintenance'); }
   };
 
   const endMaintenance = async () => {
@@ -528,26 +398,52 @@ function App() {
         body: JSON.stringify({ unit_id: selectedUnit })
       });
       fetchMaintenanceStatus();
-    } catch (e) {
-      alert('Failed to end maintenance');
-    }
+    } catch (e) { alert('Failed to end maintenance'); }
   };
 
-  // ========== DOWNLOAD FUNCTIONS ==========
+  const createUser = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAddUserModal(false);
+        setNewUser({ username: '', password: '', role: 'user', unit_id: '' });
+        fetchUsers();
+      } else {
+        alert('Failed to add user');
+      }
+    } catch (e) { alert('Error adding user'); }
+  };
+
+  const createUnit = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/units`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUnit)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAddUnitModal(false);
+        setNewUnit({ unit_id: '', name: '', location: '' });
+        fetchUnits();
+      } else {
+        alert('Failed to add unit');
+      }
+    } catch (e) { alert('Error adding unit'); }
+  };
+
   const downloadCSV = () => {
     if (historyData.length === 0) return;
-    
     const headers = ['Timestamp', 'Debris Level (%)', 'Distance (cm)', 'Overflow', 'LED', 'Battery (%)', 'Maintenance'];
     const rows = historyData.map(d => [
-      d.timestamp,
-      d.debris_level,
-      d.distance,
-      d.overflow ? 'Yes' : 'No',
-      d.led_status,
-      d.battery,
-      d.maintenance ? 'Yes' : 'No'
+      d.timestamp, d.debris_level, d.distance, d.overflow ? 'Yes' : 'No',
+      d.led_status, d.battery, d.maintenance ? 'Yes' : 'No'
     ]);
-    
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -578,14 +474,7 @@ function App() {
           <p>Unit: ${selectedUnit}</p>
           <p>Generated: ${new Date().toLocaleString()}</p>
           <table border="1" cellpadding="8">
-            <tr>
-              <th>Timestamp</th>
-              <th>Debris Level</th>
-              <th>Distance</th>
-              <th>Overflow</th>
-              <th>LED</th>
-              <th>Maintenance</th>
-            </tr>
+            <tr><th>Timestamp</th><th>Debris Level</th><th>Distance</th><th>Overflow</th><th>LED</th><th>Maintenance</th></tr>
             ${rows}
           </table>
         </body>
@@ -595,7 +484,6 @@ function App() {
     printWindow.print();
   };
 
-  // ========== RENDER HELPERS ==========
   const getStatusColor = (level) => {
     if (level >= 70) return '#f44336';
     if (level >= 40) return '#ff9800';
@@ -614,63 +502,33 @@ function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ========== LOGIN SCREEN ==========
   if (!user) {
     return (
       <div className={`login-container ${darkMode ? 'dark' : ''}`}>
         <div className="login-box">
           <h1>🌊 Smart Drainage</h1>
           <h2>{t.login}</h2>
-          
-          {!isOnline && (
-            <div className="offline-banner">
-              ⚠️ You are offline. Some features may not work.
-            </div>
-          )}
-          
+          {!isOnline && <div className="offline-banner">⚠️ You are offline. Some features may not work.</div>}
           <form onSubmit={handleLogin}>
-            <input
-              type="text"
-              placeholder={t.username}
-              value={loginForm.username}
-              onChange={e => setLoginForm({...loginForm, username: e.target.value})}
-              required
-            />
-            <input
-              type="password"
-              placeholder={t.password}
-              value={loginForm.password}
-              onChange={e => setLoginForm({...loginForm, password: e.target.value})}
-              required
-            />
+            <input type="text" placeholder={t.username} value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} required />
+            <input type="password" placeholder={t.password} value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} required />
             <label className="remember-me">
-              <input
-                type="checkbox"
-                checked={loginForm.rememberMe}
-                onChange={e => setLoginForm({...loginForm, rememberMe: e.target.checked})}
-              />
+              <input type="checkbox" checked={loginForm.rememberMe} onChange={e => setLoginForm({...loginForm, rememberMe: e.target.checked})} />
               {t.rememberMe}
             </label>
             <button type="submit">{t.login}</button>
           </form>
-          
           <div className="login-settings">
-            <button onClick={() => setDarkMode(!darkMode)}>
-              {darkMode ? '☀️' : '🌙'}
-            </button>
-            <button onClick={() => setLang(lang === 'en' ? 'tl' : 'en')}>
-              {lang === 'en' ? '🇵🇭 TL' : '🇺🇸 EN'}
-            </button>
+            <button onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️' : '🌙'}</button>
+            <button onClick={() => setLang(lang === 'en' ? 'tl' : 'en')}>{lang === 'en' ? '🇵🇭 TL' : '🇺🇸 EN'}</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // ========== MAIN DASHBOARD ==========
   return (
     <div className={`app ${darkMode ? 'dark' : ''}`}>
-      {/* Alerts */}
       <div className="alerts-container">
         {alerts.map(alert => (
           <div key={alert.id} className={`alert alert-${alert.type}`}>
@@ -680,73 +538,29 @@ function App() {
         ))}
       </div>
 
-      {/* Header */}
       <header className="app-header">
         <h1>🌊 Smart Drainage</h1>
-        
         <div className="header-controls">
-          <span className="timer">
-            ⏱️ {t.willAutoLogout}: {formatTimeLeft(timeLeft)}
-          </span>
-          
-          <select 
-            value={selectedUnit} 
-            onChange={e => setSelectedUnit(e.target.value)}
-            className="unit-select"
-          >
-            {units.map(u => (
-              <option key={u.unit_id} value={u.unit_id}>{u.name || u.unit_id}</option>
-            ))}
+          <span className="timer">⏱️ {t.willAutoLogout}: {formatTimeLeft(timeLeft)}</span>
+          <select value={selectedUnit} onChange={e => setSelectedUnit(e.target.value)} className="unit-select">
+            {units.map(u => <option key={u.unit_id} value={u.unit_id}>{u.name || u.unit_id}</option>)}
           </select>
-          
-          <button onClick={togglePush} className={pushEnabled ? 'active' : ''}>
-            {pushEnabled ? t.disablePush : t.enablePush}
-          </button>
-          
+          <button onClick={togglePush} className={pushEnabled ? 'active' : ''}>{pushEnabled ? t.disablePush : t.enablePush}</button>
           <button onClick={() => setActiveTab('settings')}>⚙️</button>
           <button onClick={handleLogout}>{t.logout}</button>
         </div>
       </header>
 
-      {/* Navigation Tabs */}
       <nav className="app-nav">
-        <button 
-          className={activeTab === 'dashboard' ? 'active' : ''}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          📊 {t.dashboard}
-        </button>
-        <button 
-          className={activeTab === 'history' ? 'active' : ''}
-          onClick={() => setActiveTab('history')}
-        >
-          📈 {t.history}
-        </button>
-        <button 
-          className={activeTab === 'notifications' ? 'active' : ''}
-          onClick={() => setActiveTab('notifications')}
-        >
-          🔔 {t.notifications}
-        </button>
-        {user.role === 'admin' && (
-          <button 
-            className={activeTab === 'admin' ? 'active' : ''}
-            onClick={() => setActiveTab('admin')}
-          >
-            🔐 {t.adminPanel}
-          </button>
-        )}
+        <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>📊 {t.dashboard}</button>
+        <button className={activeTab === 'history' ? 'active' : ''} onClick={() => setActiveTab('history')}>📈 {t.history}</button>
+        <button className={activeTab === 'notifications' ? 'active' : ''} onClick={() => setActiveTab('notifications')}>🔔 {t.notifications}</button>
+        {user.role === 'admin' && <button className={activeTab === 'admin' ? 'active' : ''} onClick={() => setActiveTab('admin')}>🔐 {t.adminPanel}</button>}
       </nav>
 
-      {/* DASHBOARD TAB */}
       {activeTab === 'dashboard' && (
         <div className="dashboard">
-          {!isOnline && (
-            <div className="offline-banner">
-              ⚠️ Offline mode - Showing cached data
-            </div>
-          )}
-          
+          {!isOnline && <div className="offline-banner">⚠️ Offline mode - Showing cached data</div>}
           {maintenanceStatus[selectedUnit]?.active && (
             <div className="maintenance-banner">
               🔧 {t.underMaintenance} 
@@ -761,71 +575,48 @@ function App() {
               <div className="big-number" style={{ color: getStatusColor(sensorData?.debris_level || 0) }}>
                 {sensorData ? `${sensorData.debris_level.toFixed(1)}%` : '--'}
               </div>
-              <div className="status-text">
-                {sensorData ? getStatusText(sensorData.debris_level) : t.noData}
-              </div>
+              <div className="status-text">{sensorData ? getStatusText(sensorData.debris_level) : t.noData}</div>
               {sensorData?.maintenance && <span className="maintenance-badge">🔧</span>}
             </div>
-
             <div className="status-card">
               <h3>Distance</h3>
-              <div className="big-number">
-                {sensorData ? `${sensorData.distance?.toFixed(2)} cm` : '--'}
-              </div>
+              <div className="big-number">{sensorData ? `${sensorData.distance?.toFixed(2)} cm` : '--'}</div>
             </div>
-
             <div className="status-card">
               <h3>{t.overflow}</h3>
               <div className={`big-number ${sensorData?.overflow ? 'danger' : 'safe'}`}>
                 {sensorData ? (sensorData.overflow ? 'YES 🚨' : 'NO ✓') : '--'}
               </div>
             </div>
-
             <div className="status-card">
               <h3>{t.ledStatus}</h3>
               <div className="led-indicator" style={{
-                backgroundColor: sensorData?.led_status === 'RED' ? '#f44336' :
-                                sensorData?.led_status === 'YELLOW' ? '#ff9800' : '#4caf50',
-                boxShadow: `0 0 20px ${sensorData?.led_status === 'RED' ? '#f4433680' :
-                          sensorData?.led_status === 'YELLOW' ? '#ff980080' : '#4caf5080'}`
-              }}>
-                {sensorData?.led_status || '--'}
-              </div>
+                backgroundColor: sensorData?.led_status === 'RED' ? '#f44336' : sensorData?.led_status === 'YELLOW' ? '#ff9800' : '#4caf50',
+                boxShadow: `0 0 20px ${sensorData?.led_status === 'RED' ? '#f4433680' : sensorData?.led_status === 'YELLOW' ? '#ff980080' : '#4caf5080'}`
+              }}>{sensorData?.led_status || '--'}</div>
             </div>
-
             <div className="status-card">
               <h3>{t.battery}</h3>
-              <div className="big-number">
-                {sensorData ? `${sensorData.battery}%` : '--'}
-              </div>
+              <div className="big-number">{sensorData ? `${sensorData.battery}%` : '--'}</div>
               <div className="battery-bar">
-                <div style={{ width: `${sensorData?.battery || 0}%`, backgroundColor: 
-                  (sensorData?.battery || 0) > 50 ? '#4caf50' : (sensorData?.battery || 0) > 20 ? '#ff9800' : '#f44336'
-                }}></div>
+                <div style={{ width: `${sensorData?.battery || 0}%`, backgroundColor: (sensorData?.battery || 0) > 50 ? '#4caf50' : (sensorData?.battery || 0) > 20 ? '#ff9800' : '#f44336' }}></div>
               </div>
             </div>
-
             <div className="status-card">
               <h3>{t.deviceStatus}</h3>
               <div className={`device-status ${deviceStatus[selectedUnit]?.status === 'live' ? 'live' : 'offline'}`}>
                 <span className="status-dot"></span>
                 {deviceStatus[selectedUnit]?.status === 'live' ? t.live : t.offline}
               </div>
-              {deviceStatus[selectedUnit]?.lastSeen && (
-                <small>Last seen: {new Date(deviceStatus[selectedUnit].lastSeen).toLocaleTimeString()}</small>
-              )}
+              {deviceStatus[selectedUnit]?.lastSeen && <small>Last seen: {new Date(deviceStatus[selectedUnit].lastSeen).toLocaleTimeString()}</small>}
             </div>
           </div>
 
           <div className="maintenance-section">
             {maintenanceStatus[selectedUnit]?.active ? (
-              <button className="maintenance-btn end" onClick={endMaintenance}>
-                {t.endMaintenance}
-              </button>
+              <button className="maintenance-btn end" onClick={endMaintenance}>{t.endMaintenance}</button>
             ) : (
-              <button className="maintenance-btn start" onClick={() => setMaintenanceModal(true)}>
-                {t.startMaintenance}
-              </button>
+              <button className="maintenance-btn start" onClick={() => setMaintenanceModal(true)}>{t.startMaintenance}</button>
             )}
           </div>
 
@@ -833,66 +624,36 @@ function App() {
             <h3>{t.debrisLevel} - {t.history}</h3>
             <Line data={chartData} options={{
               responsive: true,
-              plugins: {
-                legend: { position: 'top' },
-                title: { display: true, text: `${selectedUnit} - Last 50 Readings` }
-              },
-              scales: {
-                y: { min: 0, max: 100, title: { display: true, text: 'Fill %' } }
-              }
+              plugins: { legend: { position: 'top' }, title: { display: true, text: `${selectedUnit} - Last 50 Readings` } },
+              scales: { y: { min: 0, max: 100, title: { display: true, text: 'Fill %' } } }
             }} />
           </div>
         </div>
       )}
 
-      {/* HISTORY TAB */}
       {activeTab === 'history' && (
         <div className="history-tab">
           <h2>{t.history}</h2>
-          
           <div className="history-filters">
-            <label>{t.from}: <input 
-              type="date" 
-              value={historyFilter.startDate}
-              onChange={e => setHistoryFilter({...historyFilter, startDate: e.target.value})}
-            /></label>
-            <label>{t.to}: <input 
-              type="date" 
-              value={historyFilter.endDate}
-              onChange={e => setHistoryFilter({...historyFilter, endDate: e.target.value})}
-            /></label>
+            <label>{t.from}: <input type="date" value={historyFilter.startDate} onChange={e => setHistoryFilter({...historyFilter, startDate: e.target.value})} /></label>
+            <label>{t.to}: <input type="date" value={historyFilter.endDate} onChange={e => setHistoryFilter({...historyFilter, endDate: e.target.value})} /></label>
             <button onClick={fetchHistory}>{t.filter}</button>
             <button onClick={downloadCSV}>📄 {t.downloadCSV}</button>
             <button onClick={downloadPDF}>🖨️ {t.downloadPDF}</button>
           </div>
-          
           <div className="history-table-container">
             <table className="history-table">
               <thead>
-                <tr>
-                  <th>{t.time}</th>
-                  <th>{t.debrisLevel}</th>
-                  <th>Distance</th>
-                  <th>{t.overflow}</th>
-                  <th>LED</th>
-                  <th>{t.battery}</th>
-                  <th>{t.maintenance}</th>
-                </tr>
+                <tr><th>{t.time}</th><th>{t.debrisLevel}</th><th>Distance</th><th>{t.overflow}</th><th>LED</th><th>{t.battery}</th><th>{t.maintenance}</th></tr>
               </thead>
               <tbody>
                 {historyData.map((d, i) => (
                   <tr key={i} className={d.maintenance ? 'maintenance-row' : ''}>
                     <td>{new Date(d.timestamp).toLocaleString()}</td>
-                    <td style={{ color: getStatusColor(d.debris_level) }}>
-                      {d.debris_level.toFixed(1)}%
-                    </td>
+                    <td style={{ color: getStatusColor(d.debris_level) }}>{d.debris_level.toFixed(1)}%</td>
                     <td>{d.distance?.toFixed(2)}cm</td>
                     <td>{d.overflow ? '⚠️ YES' : '✓ No'}</td>
-                    <td>
-                      <span className={`led-mini ${d.led_status?.toLowerCase()}`}>
-                        {d.led_status}
-                      </span>
-                    </td>
+                    <td><span className={`led-mini ${d.led_status?.toLowerCase()}`}>{d.led_status}</span></td>
                     <td>{d.battery}%</td>
                     <td>{d.maintenance ? '🔧' : ''}</td>
                   </tr>
@@ -903,16 +664,12 @@ function App() {
         </div>
       )}
 
-      {/* NOTIFICATIONS TAB */}
       {activeTab === 'notifications' && (
         <div className="notifications-tab">
           <h2>{t.notifications}</h2>
           <button onClick={fetchNotificationLog} className="refresh-btn">🔄 {t.refresh}</button>
-          
           <div className="notification-list">
-            {notificationLog.length === 0 ? (
-              <p className="no-data">{t.noData}</p>
-            ) : (
+            {notificationLog.length === 0 ? <p className="no-data">{t.noData}</p> : (
               notificationLog.slice().reverse().map((n, i) => (
                 <div key={i} className={`notification-item ${n.type}`}>
                   <div className="notification-header">
@@ -929,31 +686,18 @@ function App() {
         </div>
       )}
 
-      {/* ADMIN PANEL */}
       {activeTab === 'admin' && user.role === 'admin' && (
         <div className="admin-panel">
           <h2>{t.adminPanel}</h2>
           
           <div className="admin-section">
-            <h3>📋 {t.loginHistory}</h3>
-            <button onClick={fetchLoginHistory} className="refresh-btn">🔄 {t.refresh}</button>
+            <h3>👥 {t.users}</h3>
+            <button onClick={() => setAddUserModal(true)} className="refresh-btn" style={{background: '#4caf50', marginBottom: '16px'}}>➕ {t.addUser}</button>
             <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>{t.username}</th>
-                  <th>{t.role}</th>
-                  <th>IP</th>
-                  <th>{t.time}</th>
-                </tr>
-              </thead>
+              <thead><tr><th>{t.username}</th><th>{t.role}</th><th>Unit</th></tr></thead>
               <tbody>
-                {loginHistory.map((h, i) => (
-                  <tr key={i}>
-                    <td>{h.username}</td>
-                    <td>{h.role}</td>
-                    <td>{h.ip}</td>
-                    <td>{new Date(h.time).toLocaleString()}</td>
-                  </tr>
+                {usersList.map((u, i) => (
+                  <tr key={i}><td>{u.username}</td><td>{u.role}</td><td>{u.unit_id || 'All'}</td></tr>
                 ))}
               </tbody>
             </table>
@@ -961,6 +705,7 @@ function App() {
 
           <div className="admin-section">
             <h3>📍 {t.units}</h3>
+            <button onClick={() => setAddUnitModal(true)} className="refresh-btn" style={{background: '#4caf50', marginBottom: '16px'}}>➕ {t.addUnit}</button>
             <div className="units-list">
               {units.map(u => (
                 <div key={u.unit_id} className="unit-card">
@@ -969,12 +714,23 @@ function App() {
                   <span className={`status-badge ${deviceStatus[u.unit_id]?.status === 'live' ? 'live' : 'offline'}`}>
                     {deviceStatus[u.unit_id]?.status === 'live' ? t.live : t.offline}
                   </span>
-                  {maintenanceStatus[u.unit_id]?.active && (
-                    <span className="maintenance-badge-small">🔧 {t.maintenance}</span>
-                  )}
+                  {maintenanceStatus[u.unit_id]?.active && <span className="maintenance-badge-small">🔧 {t.maintenance}</span>}
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="admin-section">
+            <h3>📋 {t.loginHistory}</h3>
+            <button onClick={fetchLoginHistory} className="refresh-btn">🔄 {t.refresh}</button>
+            <table className="admin-table">
+              <thead><tr><th>{t.username}</th><th>{t.role}</th><th>IP</th><th>{t.time}</th></tr></thead>
+              <tbody>
+                {loginHistory.map((h, i) => (
+                  <tr key={i}><td>{h.username}</td><td>{h.role}</td><td>{h.ip}</td><td>{new Date(h.time).toLocaleString()}</td></tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <div className="admin-section">
@@ -983,73 +739,47 @@ function App() {
               {Object.entries(maintenanceStatus).map(([unitId, status]) => (
                 status.active && (
                   <div key={unitId} className="maintenance-card">
-                    <h4>{unitId}</h4>
-                    <p>By: {status.startedBy}</p>
-                    <p>Reason: {status.reason}</p>
+                    <h4>{unitId}</h4><p>By: {status.startedBy}</p><p>Reason: {status.reason}</p>
                     <p>Since: {new Date(status.startedAt).toLocaleString()}</p>
                   </div>
                 )
               ))}
-              {Object.values(maintenanceStatus).every(s => !s.active) && (
-                <p>No units under maintenance</p>
-              )}
+              {Object.values(maintenanceStatus).every(s => !s.active) && <p>No units under maintenance</p>}
             </div>
           </div>
         </div>
       )}
 
-      {/* SETTINGS TAB */}
       {activeTab === 'settings' && (
         <div className="settings-panel">
           <h2>⚙️ {t.settings}</h2>
-          
           <div className="setting-item">
             <label>{t.darkMode}</label>
-            <button onClick={() => setDarkMode(!darkMode)}>
-              {darkMode ? '☀️ ' + t.lightMode : '🌙 ' + t.darkMode}
-            </button>
+            <button onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️ ' + t.lightMode : '🌙 ' + t.darkMode}</button>
           </div>
-          
           <div className="setting-item">
             <label>{t.language}</label>
-            <button onClick={() => setLang(lang === 'en' ? 'tl' : 'en')}>
-              {lang === 'en' ? '🇵🇭 ' + t.tagalog : '🇺🇸 ' + t.english}
-            </button>
+            <button onClick={() => setLang(lang === 'en' ? 'tl' : 'en')}>{lang === 'en' ? '🇵🇭 ' + t.tagalog : '🇺🇸 ' + t.english}</button>
           </div>
-          
           <div className="setting-item">
             <label>{t.voiceAlert}</label>
-            <button onClick={() => setVoiceAlert(!voiceAlert)} className={voiceAlert ? 'active' : ''}>
-              {voiceAlert ? '🔊 ON' : '🔇 OFF'}
-            </button>
+            <button onClick={() => setVoiceAlert(!voiceAlert)} className={voiceAlert ? 'active' : ''}>{voiceAlert ? '🔊 ON' : '🔇 OFF'}</button>
           </div>
-          
           <div className="setting-item">
             <label>Push Notifications</label>
-            <button onClick={togglePush} className={pushEnabled ? 'active' : ''}>
-              {pushEnabled ? t.disablePush : t.enablePush}
-            </button>
+            <button onClick={togglePush} className={pushEnabled ? 'active' : ''}>{pushEnabled ? t.disablePush : t.enablePush}</button>
           </div>
-          
-          <button onClick={() => setActiveTab('dashboard')} className="back-btn">
-            ← Back to Dashboard
-          </button>
+          <button onClick={() => setActiveTab('dashboard')} className="back-btn">← Back to Dashboard</button>
         </div>
       )}
 
-      {/* MAINTENANCE MODAL */}
       {maintenanceModal && (
         <div className="modal-overlay">
           <div className="modal">
             <h3>🔧 {t.startMaintenance}</h3>
             <p>Unit: <strong>{selectedUnit}</strong></p>
             <label>{t.maintenanceNote}</label>
-            <textarea
-              value={maintenanceReason}
-              onChange={e => setMaintenanceReason(e.target.value)}
-              placeholder="e.g., Cleaning debris, Repairing pipe..."
-              rows={3}
-            />
+            <textarea value={maintenanceReason} onChange={e => setMaintenanceReason(e.target.value)} placeholder="e.g., Cleaning debris, Repairing pipe..." rows={3} />
             <div className="modal-buttons">
               <button onClick={() => setMaintenanceModal(false)} className="cancel-btn">{t.cancel}</button>
               <button onClick={startMaintenance} className="confirm-btn">{t.confirm}</button>
@@ -1058,7 +788,40 @@ function App() {
         </div>
       )}
 
-      {/* Footer */}
+      {addUserModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>➕ {t.addUser}</h3>
+            <input placeholder={t.username} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
+            <input type="password" placeholder={t.password} value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+            <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+            <input placeholder="Unit ID (optional)" value={newUser.unit_id} onChange={e => setNewUser({...newUser, unit_id: e.target.value})} />
+            <div className="modal-buttons">
+              <button onClick={() => setAddUserModal(false)} className="cancel-btn">{t.cancel}</button>
+              <button onClick={createUser} className="confirm-btn">{t.confirm}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addUnitModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>➕ {t.addUnit}</h3>
+            <input placeholder="Unit ID (e.g., drainage_2)" value={newUnit.unit_id} onChange={e => setNewUnit({...newUnit, unit_id: e.target.value})} />
+            <input placeholder="Name (e.g., Drainage 2)" value={newUnit.name} onChange={e => setNewUnit({...newUnit, name: e.target.value})} />
+            <input placeholder="Location (e.g., Second Street)" value={newUnit.location} onChange={e => setNewUnit({...newUnit, location: e.target.value})} />
+            <div className="modal-buttons">
+              <button onClick={() => setAddUnitModal(false)} className="cancel-btn">{t.cancel}</button>
+              <button onClick={createUnit} className="confirm-btn">{t.confirm}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer className="app-footer">
         <p>Smart Drainage System | {user.username} ({user.role}) | {new Date().toLocaleDateString()}</p>
       </footer>
