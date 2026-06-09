@@ -89,7 +89,7 @@ app.post('/api/data', async (req, res) => {
   
   if (overflow || debris_level >= 95) {
     const alertMsg = overflow 
-      ? `🚨 OVERFLOW DETECTED at ${unit_id}!` 
+      ? `🚨 OVERFLOW DETECTED at ${unit_id}!`
       : `⚠️ ${unit_id} is ${debris_level.toFixed(1)}% FULL!`;
     
     notificationLog.push({
