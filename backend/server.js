@@ -8,9 +8,17 @@ require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, { 
+  cors: { 
+    origin: ['https://smart-drainage.vercel.app', 'http://localhost:3000'],
+    credentials: true 
+  } 
+});
 
-app.use(cors());
+app.use(cors({ 
+  origin: ['https://smart-drainage.vercel.app', 'http://localhost:3000'],
+  credentials: true 
+}));
 app.use(express.json());
 
 // Supabase
@@ -61,7 +69,7 @@ app.post('/api/logout', (req, res) => {
 
 // ========== DATA RECEIVE FROM ESP32 ==========
 app.post('/api/data', async (req, res) => {
-  const { unit_id, debris_level, overflow, led_status, battery, distance } = req.body;
+  const { unit_id, debris_level, overflow, led_status, battery, distance = 0 } = req.body;
   
   if (maintenanceMode[unit_id]?.active) {
     await supabase.from('readings').insert([{
@@ -192,7 +200,17 @@ app.get('/api/units', async (req, res) => {
 
 app.post('/api/units', async (req, res) => {
   const { unit_id, name, location } = req.body;
+  if (!unit_id) return res.status(400).json({ error: 'unit_id is required' });
+  
   const { error } = await supabase.from('drainage_units').insert([{ unit_id, name, location }]);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// DELETE UNIT
+app.delete('/api/units/:unit_id', async (req, res) => {
+  const { unit_id } = req.params;
+  const { error } = await supabase.from('drainage_units').delete().eq('unit_id', unit_id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
@@ -206,7 +224,41 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   const { username, password, role, unit_id } = req.body;
-  const { error } = await supabase.from('users').insert([{ username, password, role, unit_id }]);
+  
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+  
+  // Check if user already exists
+  const { data: existing } = await supabase
+    .from('users')
+    .select('username')
+    .eq('username', username)
+    .single();
+    
+  if (existing) {
+    return res.status(400).json({ error: 'Username already exists' });
+  }
+  
+  const { error } = await supabase.from('users').insert([{ 
+    username, 
+    password, 
+    role: role || 'user', 
+    unit_id: unit_id || null 
+  }]);
+  
+  if (error) {
+    console.error('Supabase insert error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+  
+  res.json({ success: true });
+});
+
+// DELETE USER
+app.delete('/api/users/:username', async (req, res) => {
+  const { username } = req.params;
+  const { error } = await supabase.from('users').delete().eq('username', username);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
