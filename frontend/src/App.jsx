@@ -88,6 +88,7 @@ function App() {
   const [addUnitModal, setAddUnitModal] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user', unit_id: '' });
   const [newUnit, setNewUnit] = useState({ unit_id: '', name: '', location: '' });
+  const [adminError, setAdminError] = useState(null);
   
   const t = translations[lang];
   const inactivityTimer = useRef(null);
@@ -102,8 +103,16 @@ function App() {
     if (savedUser && savedTime) {
       const elapsed = Date.now() - parseInt(savedTime);
       if (savedRemember && elapsed < INACTIVITY_TIMEOUT) {
-        setUser(JSON.parse(savedUser));
-        setTimeLeft(INACTIVITY_TIMEOUT - elapsed);
+        try {
+          const parsed = JSON.parse(savedUser);
+          setUser(parsed);
+          setTimeLeft(INACTIVITY_TIMEOUT - elapsed);
+        } catch (e) {
+          console.error('Failed to parse saved user:', e);
+          localStorage.removeItem('drainage_user');
+          localStorage.removeItem('drainage_loginTime');
+          localStorage.removeItem('drainage_remember');
+        }
       } else {
         localStorage.removeItem('drainage_user');
         localStorage.removeItem('drainage_loginTime');
@@ -221,23 +230,41 @@ function App() {
     try {
       const res = await fetch(`${API_URL}/api/units`);
       const data = await res.json();
-      setUnits(data);
-    } catch (e) { console.error('Fetch units error:', e); }
+      if (Array.isArray(data)) {
+        setUnits(data);
+      } else {
+        console.error('Units data is not an array:', data);
+        setUnits([]);
+      }
+    } catch (e) { 
+      console.error('Fetch units error:', e); 
+      setUnits([]);
+    }
   };
 
   const fetchUsers = async () => {
     try {
       const res = await fetch(`${API_URL}/api/users`);
       const data = await res.json();
-      setUsersList(data);
-    } catch (e) { console.error('Fetch users error:', e); }
+      if (Array.isArray(data)) {
+        setUsersList(data);
+      } else {
+        console.error('Users data is not an array:', data);
+        setUsersList([]);
+      }
+    } catch (e) { 
+      console.error('Fetch users error:', e); 
+      setUsersList([]);
+    }
   };
 
   const fetchSensorData = async () => {
     try {
       const res = await fetch(`${API_URL}/api/data/${selectedUnit}?limit=1`);
       const data = await res.json();
-      if (data.length > 0) setSensorData(data[0]);
+      if (Array.isArray(data) && data.length > 0) {
+        setSensorData(data[0]);
+      }
     } catch (e) { console.error('Fetch sensor error:', e); }
   };
 
@@ -249,47 +276,76 @@ function App() {
       
       const res = await fetch(url);
       const data = await res.json();
-      setHistoryData(data);
-      
-      const labels = data.slice().reverse().map(d => new Date(d.timestamp).toLocaleTimeString());
-      const levels = data.slice().reverse().map(d => d.debris_level);
-      
-      setChartData({
-        labels,
-        datasets: [{
-          label: t.debrisLevel,
-          data: levels,
-          borderColor: darkMode ? '#4fc3f7' : '#1976d2',
-          backgroundColor: darkMode ? 'rgba(79,195,247,0.1)' : 'rgba(25,118,210,0.1)',
-          tension: 0.4,
-          fill: true,
-        }]
-      });
-    } catch (e) { console.error('Fetch history error:', e); }
+      if (Array.isArray(data)) {
+        setHistoryData(data);
+        
+        const labels = data.slice().reverse().map(d => new Date(d.timestamp).toLocaleTimeString());
+        const levels = data.slice().reverse().map(d => d.debris_level);
+        
+        setChartData({
+          labels,
+          datasets: [{
+            label: t.debrisLevel,
+            data: levels,
+            borderColor: darkMode ? '#4fc3f7' : '#1976d2',
+            backgroundColor: darkMode ? 'rgba(79,195,247,0.1)' : 'rgba(25,118,210,0.1)',
+            tension: 0.4,
+            fill: true,
+          }]
+        });
+      } else {
+        setHistoryData([]);
+      }
+    } catch (e) { 
+      console.error('Fetch history error:', e); 
+      setHistoryData([]);
+    }
   };
 
   const fetchMaintenanceStatus = async () => {
     try {
       const res = await fetch(`${API_URL}/api/maintenance/status`);
       const data = await res.json();
-      setMaintenanceStatus(data);
-    } catch (e) { console.error('Fetch maintenance error:', e); }
+      if (data && typeof data === 'object') {
+        setMaintenanceStatus(data);
+      } else {
+        setMaintenanceStatus({});
+      }
+    } catch (e) { 
+      console.error('Fetch maintenance error:', e); 
+      setMaintenanceStatus({});
+    }
   };
 
   const fetchNotificationLog = async () => {
     try {
       const res = await fetch(`${API_URL}/api/notifications/log`);
       const data = await res.json();
-      setNotificationLog(data);
-    } catch (e) { console.error('Fetch notifications error:', e); }
+      if (Array.isArray(data)) {
+        setNotificationLog(data);
+      } else {
+        setNotificationLog([]);
+      }
+    } catch (e) { 
+      console.error('Fetch notifications error:', e); 
+      setNotificationLog([]);
+    }
   };
 
   const fetchLoginHistory = async () => {
     try {
       const res = await fetch(`${API_URL}/api/login-history`);
       const data = await res.json();
-      setLoginHistory(data);
-    } catch (e) { console.error('Fetch login history error:', e); }
+      if (Array.isArray(data)) {
+        setLoginHistory(data);
+      } else {
+        console.error('Login history data is not an array:', data);
+        setLoginHistory([]);
+      }
+    } catch (e) { 
+      console.error('Fetch login history error:', e); 
+      setLoginHistory([]);
+    }
   };
 
   const handleLogin = async (e) => {
@@ -302,7 +358,7 @@ function App() {
       });
       const data = await res.json();
       
-      if (data.success) {
+      if (data.success && data.user) {
         setUser(data.user);
         localStorage.setItem('drainage_user', JSON.stringify(data.user));
         localStorage.setItem('drainage_loginTime', Date.now().toString());
@@ -310,7 +366,10 @@ function App() {
       } else {
         alert('Invalid credentials!');
       }
-    } catch (e) { alert('Login failed!'); }
+    } catch (e) { 
+      console.error('Login error:', e);
+      alert('Login failed!'); 
+    }
   };
 
   const handleLogout = () => {
@@ -438,7 +497,7 @@ function App() {
   };
 
   const downloadCSV = () => {
-    if (historyData.length === 0) return;
+    if (!Array.isArray(historyData) || historyData.length === 0) return;
     const headers = ['Timestamp', 'Debris Level (%)', 'Distance (cm)', 'Overflow', 'LED', 'Battery (%)', 'Maintenance'];
     const rows = historyData.map(d => [
       d.timestamp, d.debris_level, d.distance, d.overflow ? 'Yes' : 'No',
@@ -454,6 +513,7 @@ function App() {
   };
 
   const downloadPDF = () => {
+    if (!Array.isArray(historyData) || historyData.length === 0) return;
     const printWindow = window.open('', '_blank');
     const rows = historyData.map(d => `
       <tr>
@@ -502,6 +562,10 @@ function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Safe render helpers for admin panel
+  const safeArray = (arr) => Array.isArray(arr) ? arr : [];
+  const safeObject = (obj) => (obj && typeof obj === 'object') ? obj : {};
+
   if (!user) {
     return (
       <div className={`login-container ${darkMode ? 'dark' : ''}`}>
@@ -543,7 +607,7 @@ function App() {
         <div className="header-controls">
           <span className="timer">⏱️ {t.willAutoLogout}: {formatTimeLeft(timeLeft)}</span>
           <select value={selectedUnit} onChange={e => setSelectedUnit(e.target.value)} className="unit-select">
-            {units.map(u => <option key={u.unit_id} value={u.unit_id}>{u.name || u.unit_id}</option>)}
+            {safeArray(units).map(u => <option key={u?.unit_id} value={u?.unit_id}>{u?.name || u?.unit_id}</option>)}
           </select>
           <button onClick={togglePush} className={pushEnabled ? 'active' : ''}>{pushEnabled ? t.disablePush : t.enablePush}</button>
           <button onClick={() => setActiveTab('settings')}>⚙️</button>
@@ -555,7 +619,7 @@ function App() {
         <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>📊 {t.dashboard}</button>
         <button className={activeTab === 'history' ? 'active' : ''} onClick={() => setActiveTab('history')}>📈 {t.history}</button>
         <button className={activeTab === 'notifications' ? 'active' : ''} onClick={() => setActiveTab('notifications')}>🔔 {t.notifications}</button>
-        {user.role === 'admin' && <button className={activeTab === 'admin' ? 'active' : ''} onClick={() => setActiveTab('admin')}>🔐 {t.adminPanel}</button>}
+        {user?.role === 'admin' && <button className={activeTab === 'admin' ? 'active' : ''} onClick={() => setActiveTab('admin')}>🔐 {t.adminPanel}</button>}
       </nav>
 
       {activeTab === 'dashboard' && (
@@ -573,14 +637,14 @@ function App() {
             <div className="status-card">
               <h3>{t.debrisLevel}</h3>
               <div className="big-number" style={{ color: getStatusColor(sensorData?.debris_level || 0) }}>
-                {sensorData ? `${sensorData.debris_level.toFixed(1)}%` : '--'}
+                {sensorData ? `${sensorData.debris_level?.toFixed(1)}%` : '--'}
               </div>
               <div className="status-text">{sensorData ? getStatusText(sensorData.debris_level) : t.noData}</div>
               {sensorData?.maintenance && <span className="maintenance-badge">🔧</span>}
             </div>
             <div className="status-card">
               <h3>Distance</h3>
-              <div className="big-number">{sensorData ? `${sensorData.distance?.toFixed(2)} cm` : '--'}</div>
+              <div className="big-number">{sensorData?.distance != null ? `${sensorData.distance.toFixed(2)} cm` : '--'}</div>
             </div>
             <div className="status-card">
               <h3>{t.overflow}</h3>
@@ -597,7 +661,7 @@ function App() {
             </div>
             <div className="status-card">
               <h3>{t.battery}</h3>
-              <div className="big-number">{sensorData ? `${sensorData.battery}%` : '--'}</div>
+              <div className="big-number">{sensorData?.battery != null ? `${sensorData.battery}%` : '--'}</div>
               <div className="battery-bar">
                 <div style={{ width: `${sensorData?.battery || 0}%`, backgroundColor: (sensorData?.battery || 0) > 50 ? '#4caf50' : (sensorData?.battery || 0) > 20 ? '#ff9800' : '#f44336' }}></div>
               </div>
@@ -647,15 +711,15 @@ function App() {
                 <tr><th>{t.time}</th><th>{t.debrisLevel}</th><th>Distance</th><th>{t.overflow}</th><th>LED</th><th>{t.battery}</th><th>{t.maintenance}</th></tr>
               </thead>
               <tbody>
-                {historyData.map((d, i) => (
-                  <tr key={i} className={d.maintenance ? 'maintenance-row' : ''}>
-                    <td>{new Date(d.timestamp).toLocaleString()}</td>
-                    <td style={{ color: getStatusColor(d.debris_level) }}>{d.debris_level.toFixed(1)}%</td>
-                    <td>{d.distance?.toFixed(2)}cm</td>
-                    <td>{d.overflow ? '⚠️ YES' : '✓ No'}</td>
-                    <td><span className={`led-mini ${d.led_status?.toLowerCase()}`}>{d.led_status}</span></td>
-                    <td>{d.battery}%</td>
-                    <td>{d.maintenance ? '🔧' : ''}</td>
+                {safeArray(historyData).map((d, i) => (
+                  <tr key={i} className={d?.maintenance ? 'maintenance-row' : ''}>
+                    <td>{d?.timestamp ? new Date(d.timestamp).toLocaleString() : '-'}</td>
+                    <td style={{ color: getStatusColor(d?.debris_level || 0) }}>{d?.debris_level?.toFixed(1)}%</td>
+                    <td>{d?.distance != null ? `${d.distance.toFixed(2)}cm` : '-'}</td>
+                    <td>{d?.overflow ? '⚠️ YES' : '✓ No'}</td>
+                    <td><span className={`led-mini ${d?.led_status?.toLowerCase()}`}>{d?.led_status}</span></td>
+                    <td>{d?.battery != null ? `${d.battery}%` : '-'}</td>
+                    <td>{d?.maintenance ? '🔧' : ''}</td>
                   </tr>
                 ))}
               </tbody>
@@ -669,16 +733,16 @@ function App() {
           <h2>{t.notifications}</h2>
           <button onClick={fetchNotificationLog} className="refresh-btn">🔄 {t.refresh}</button>
           <div className="notification-list">
-            {notificationLog.length === 0 ? <p className="no-data">{t.noData}</p> : (
-              notificationLog.slice().reverse().map((n, i) => (
-                <div key={i} className={`notification-item ${n.type}`}>
+            {safeArray(notificationLog).length === 0 ? <p className="no-data">{t.noData}</p> : (
+              safeArray(notificationLog).slice().reverse().map((n, i) => (
+                <div key={i} className={`notification-item ${n?.type}`}>
                   <div className="notification-header">
-                    <span className="notification-unit">{n.unit_id}</span>
-                    <span className="notification-type">{n.type === 'overflow' ? '🚨' : '⚠️'} {n.type.toUpperCase()}</span>
-                    <span className="notification-time">{new Date(n.time).toLocaleString()}</span>
+                    <span className="notification-unit">{n?.unit_id}</span>
+                    <span className="notification-type">{n?.type === 'overflow' ? '🚨' : '⚠️'} {n?.type?.toUpperCase()}</span>
+                    <span className="notification-time">{n?.time ? new Date(n.time).toLocaleString() : '-'}</span>
                   </div>
-                  <p className="notification-message">{n.message}</p>
-                  <span className="notification-sent">{n.sent ? '✓ Delivered' : '✗ Not delivered'}</span>
+                  <p className="notification-message">{n?.message}</p>
+                  <span className="notification-sent">{n?.sent ? '✓ Delivered' : '✗ Not delivered'}</span>
                 </div>
               ))
             )}
@@ -686,9 +750,10 @@ function App() {
         </div>
       )}
 
-      {activeTab === 'admin' && user.role === 'admin' && (
+      {activeTab === 'admin' && user?.role === 'admin' && (
         <div className="admin-panel">
           <h2>{t.adminPanel}</h2>
+          {adminError && <div className="error-banner">⚠️ {adminError}</div>}
           
           <div className="admin-section">
             <h3>👥 {t.users}</h3>
@@ -696,9 +761,10 @@ function App() {
             <table className="admin-table">
               <thead><tr><th>{t.username}</th><th>{t.role}</th><th>Unit</th></tr></thead>
               <tbody>
-                {usersList.map((u, i) => (
-                  <tr key={i}><td>{u.username}</td><td>{u.role}</td><td>{u.unit_id || 'All'}</td></tr>
+                {safeArray(usersList).map((u, i) => (
+                  <tr key={i}><td>{u?.username || '-'}</td><td>{u?.role || '-'}</td><td>{u?.unit_id || 'All'}</td></tr>
                 ))}
+                {safeArray(usersList).length === 0 && <tr><td colSpan="3" style={{textAlign: 'center'}}>No users found</td></tr>}
               </tbody>
             </table>
           </div>
@@ -707,16 +773,17 @@ function App() {
             <h3>📍 {t.units}</h3>
             <button onClick={() => setAddUnitModal(true)} className="refresh-btn" style={{background: '#4caf50', marginBottom: '16px'}}>➕ {t.addUnit}</button>
             <div className="units-list">
-              {units.map(u => (
-                <div key={u.unit_id} className="unit-card">
-                  <h4>{u.name || u.unit_id}</h4>
-                  <p>{u.location}</p>
-                  <span className={`status-badge ${deviceStatus[u.unit_id]?.status === 'live' ? 'live' : 'offline'}`}>
-                    {deviceStatus[u.unit_id]?.status === 'live' ? t.live : t.offline}
+              {safeArray(units).map(u => (
+                <div key={u?.unit_id || Math.random()} className="unit-card">
+                  <h4>{u?.name || u?.unit_id || 'Unknown'}</h4>
+                  <p>{u?.location || 'No location'}</p>
+                  <span className={`status-badge ${deviceStatus[u?.unit_id]?.status === 'live' ? 'live' : 'offline'}`}>
+                    {deviceStatus[u?.unit_id]?.status === 'live' ? t.live : t.offline}
                   </span>
-                  {maintenanceStatus[u.unit_id]?.active && <span className="maintenance-badge-small">🔧 {t.maintenance}</span>}
+                  {maintenanceStatus[u?.unit_id]?.active && <span className="maintenance-badge-small">🔧 {t.maintenance}</span>}
                 </div>
               ))}
+              {safeArray(units).length === 0 && <p>No units found</p>}
             </div>
           </div>
 
@@ -726,9 +793,15 @@ function App() {
             <table className="admin-table">
               <thead><tr><th>{t.username}</th><th>{t.role}</th><th>IP</th><th>{t.time}</th></tr></thead>
               <tbody>
-                {loginHistory.map((h, i) => (
-                  <tr key={i}><td>{h.username}</td><td>{h.role}</td><td>{h.ip}</td><td>{new Date(h.time).toLocaleString()}</td></tr>
+                {safeArray(loginHistory).map((h, i) => (
+                  <tr key={i}>
+                    <td>{h?.username || '-'}</td>
+                    <td>{h?.role || '-'}</td>
+                    <td>{h?.ip || '-'}</td>
+                    <td>{h?.time ? new Date(h.time).toLocaleString() : '-'}</td>
+                  </tr>
                 ))}
+                {safeArray(loginHistory).length === 0 && <tr><td colSpan="4" style={{textAlign: 'center'}}>No login history</td></tr>}
               </tbody>
             </table>
           </div>
@@ -736,15 +809,17 @@ function App() {
           <div className="admin-section">
             <h3>🔧 Maintenance Status</h3>
             <div className="maintenance-overview">
-              {Object.entries(maintenanceStatus).map(([unitId, status]) => (
-                status.active && (
+              {Object.entries(safeObject(maintenanceStatus)).map(([unitId, status]) => (
+                status?.active && (
                   <div key={unitId} className="maintenance-card">
-                    <h4>{unitId}</h4><p>By: {status.startedBy}</p><p>Reason: {status.reason}</p>
-                    <p>Since: {new Date(status.startedAt).toLocaleString()}</p>
+                    <h4>{unitId}</h4>
+                    <p>By: {status?.startedBy || 'Unknown'}</p>
+                    <p>Reason: {status?.reason || 'N/A'}</p>
+                    <p>Since: {status?.startedAt ? new Date(status.startedAt).toLocaleString() : 'Unknown'}</p>
                   </div>
                 )
               ))}
-              {Object.values(maintenanceStatus).every(s => !s.active) && <p>No units under maintenance</p>}
+              {Object.values(safeObject(maintenanceStatus)).every(s => !s?.active) && <p>No units under maintenance</p>}
             </div>
           </div>
         </div>
@@ -823,7 +898,7 @@ function App() {
       )}
 
       <footer className="app-footer">
-        <p>Smart Drainage System | {user.username} ({user.role}) | {new Date().toLocaleDateString()}</p>
+        <p>Smart Drainage System | {user?.username} ({user?.role}) | {new Date().toLocaleDateString()}</p>
       </footer>
     </div>
   );

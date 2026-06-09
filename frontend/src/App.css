@@ -756,4 +756,12 @@ body {
     right: 16px;
     max-width: none;
   }
+  .error-banner {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #f5c6cb;
+}
 }
