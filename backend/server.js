@@ -217,9 +217,9 @@ app.delete('/api/units/:unit_id', async (req, res) => {
 
 // ========== USERS ==========
 app.get('/api/users', async (req, res) => {
-  const { data, error } = await supabase.from('users').select('username, role, unit_id');
+  const { data, error } = await supabase.from('users').select('*');
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  res.json(data || []);
 });
 
 app.post('/api/users', async (req, res) => {
