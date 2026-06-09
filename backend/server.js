@@ -64,7 +64,7 @@ app.post('/api/data', async (req, res) => {
   const { unit_id, debris_level, overflow, led_status, battery, distance } = req.body;
   
   if (maintenanceMode[unit_id]?.active) {
-    await supabase.from('sensor_data').insert([{
+    await supabase.from('readings').insert([{
       unit_id, debris_level, overflow, led_status, battery, distance,
       maintenance: true, timestamp: new Date().toISOString()
     }]);
@@ -73,7 +73,7 @@ app.post('/api/data', async (req, res) => {
     return res.json({ success: true, maintenance: true });
   }
   
-  const { error } = await supabase.from('sensor_data').insert([{
+  const { error } = await supabase.from('readings').insert([{
     unit_id, debris_level, overflow, led_status, battery, distance,
     maintenance: false, timestamp: new Date().toISOString()
   }]);
@@ -154,7 +154,7 @@ app.get('/api/data/:unit_id', async (req, res) => {
   const { limit = 50 } = req.query;
   
   const { data, error } = await supabase
-    .from('sensor_data')
+    .from('readings')
     .select('*')
     .eq('unit_id', unit_id)
     .order('timestamp', { ascending: false })
@@ -184,15 +184,15 @@ app.get('/api/data/:unit_id/history', async (req, res) => {
 });
 
 // ========== UNITS ==========
-app.get('/api/units', async (req, res) => {
-  const { data, error } = await supabase.from('units').select('*');
+app.get('/api/drainage_units', async (req, res) => {
+  const { data, error } = await supabase.from('drainage_units').select('*');
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 
-app.post('/api/units', async (req, res) => {
+app.post('/api/drainage_units', async (req, res) => {
   const { unit_id, name, location } = req.body;
-  const { error } = await supabase.from('units').insert([{ unit_id, name, location }]);
+  const { error } = await supabase.from('drainage_units').insert([{ unit_id, name, location }]);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
