@@ -169,7 +169,7 @@ app.get('/api/data/:unit_id/history', async (req, res) => {
   const { startDate, endDate, limit = 500 } = req.query;
   
   let query = supabase
-    .from('sensor_data')
+    .from('readings')
     .select('*')
     .eq('unit_id', unit_id)
     .order('timestamp', { ascending: false });
@@ -184,15 +184,29 @@ app.get('/api/data/:unit_id/history', async (req, res) => {
 });
 
 // ========== UNITS ==========
-app.get('/api/drainage_units', async (req, res) => {
+app.get('/api/units', async (req, res) => {
   const { data, error } = await supabase.from('drainage_units').select('*');
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 
-app.post('/api/drainage_units', async (req, res) => {
+app.post('/api/units', async (req, res) => {
   const { unit_id, name, location } = req.body;
   const { error } = await supabase.from('drainage_units').insert([{ unit_id, name, location }]);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// ========== USERS ==========
+app.get('/api/users', async (req, res) => {
+  const { data, error } = await supabase.from('users').select('username, role, unit_id');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/users', async (req, res) => {
+  const { username, password, role, unit_id } = req.body;
+  const { error } = await supabase.from('users').insert([{ username, password, role, unit_id }]);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
@@ -233,19 +247,6 @@ app.post('/api/heartbeat', (req, res) => {
   res.json({ success: true, timestamp: new Date().toISOString() });
 });
 
+// ========== THIS MUST BE LAST ==========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-// ========== USERS ==========
-app.get('/api/users', async (req, res) => {
-  const { data, error } = await supabase.from('users').select('username, role, unit_id');
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
-
-app.post('/api/users', async (req, res) => {
-  const { username, password, role, unit_id } = req.body;
-  const { error } = await supabase.from('users').insert([{ username, password, role, unit_id }]);
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
-});
