@@ -1,531 +1,1069 @@
-import { useEffect, useState, useCallback } from "react";
-import { io } from "socket.io-client";
-import axios from "axios";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { io } from 'socket.io-client';
+import './App.css';
 
-const SERVER = "https://smart-drainage-production.up.railway.app";
-const socket = io(SERVER);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const getDeviceStatusInfo = (lastSeen, lastBattery) => {
-  if (!lastSeen) return { text: "No Data", color: "#ef4444", bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.3)", dot: "#ef4444", pulse: false };
-  const secondsAgo = (Date.now() - new Date(lastSeen).getTime()) / 1000;
-  if (secondsAgo > 30) {
-    if (lastBattery !== undefined && lastBattery < 20) {
-      return { text: "Low Battery", color: "#f59e0b", bg: "rgba(245,158,11,0.15)", border: "rgba(245,158,11,0.3)", dot: "#f59e0b", pulse: false };
-    }
-    return { text: "Offline", color: "#ef4444", bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.3)", dot: "#ef4444", pulse: false };
+const API_URL = 'https://smart-drainage-production.up.railway.app';
+const SOCKET_URL = 'wss://smart-drainage-production.up.railway.app';
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 1 hour
+
+// ========== VAPID KEY (Replace with your actual key) ==========
+const VAPID_PUBLIC_KEY = 'BLxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+
+// ========== TRANSLATIONS ==========
+const translations = {
+  en: {
+    login: 'Login',
+    username: 'Username',
+    password: 'Password',
+    rememberMe: 'Remember Me',
+    dashboard: 'Dashboard',
+    drainageStatus: 'Drainage Status',
+    debrisLevel: 'Debris Level',
+    overflow: 'Overflow',
+    ledStatus: 'LED Status',
+    battery: 'Battery',
+    deviceStatus: 'Device Status',
+    live: 'Live',
+    offline: 'Offline',
+    maintenance: 'Maintenance',
+    startMaintenance: '🔧 Start Maintenance',
+    endMaintenance: '✅ End Maintenance',
+    underMaintenance: '🔧 Under Maintenance',
+    maintenanceBy: 'By',
+    maintenanceReason: 'Reason',
+    history: 'History',
+    downloadCSV: 'Download CSV',
+    downloadPDF: 'Download PDF',
+    notifications: 'Notifications',
+    loginHistory: 'Login History',
+    settings: 'Settings',
+    darkMode: 'Dark Mode',
+    lightMode: 'Light Mode',
+    language: 'Language',
+    english: 'English',
+    tagalog: 'Tagalog',
+    voiceAlert: 'Voice Alert',
+    enablePush: '🔕 Enable Alerts',
+    disablePush: '🔔 Disable Alerts',
+    logout: 'Logout',
+    willAutoLogout: 'Auto-logout in',
+    minutes: 'minutes',
+    alertOverflow: 'OVERFLOW DETECTED',
+    alertCritical: 'CRITICAL LEVEL',
+    noData: 'No data available',
+    selectUnit: 'Select Unit',
+    adminPanel: 'Admin Panel',
+    users: 'Users',
+    units: 'Units',
+    addUser: 'Add User',
+    addUnit: 'Add Unit',
+    photoUpload: 'Upload Photo',
+    maintenanceNote: 'What is being done?',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    done: 'Done',
+    refresh: 'Refresh',
+    dateRange: 'Date Range',
+    from: 'From',
+    to: 'To',
+    filter: 'Filter',
+    all: 'All',
+    type: 'Type',
+    message: 'Message',
+    time: 'Time',
+    sent: 'Sent',
+    ip: 'IP Address',
+    role: 'Role',
+    lastLogin: 'Last Login',
+    normal: 'Normal',
+    warning: 'Warning',
+    critical: 'Critical',
+    emergency: 'Emergency',
+  },
+  tl: {
+    login: 'Mag-login',
+    username: 'Username',
+    password: 'Password',
+    rememberMe: 'Tandaan Ako',
+    dashboard: 'Dashboard',
+    drainageStatus: 'Status ng Drainage',
+    debrisLevel: 'Antas ng Basura',
+    overflow: 'Umaapaw',
+    ledStatus: 'Status ng LED',
+    battery: 'Baterya',
+    deviceStatus: 'Status ng Device',
+    live: 'Live',
+    offline: 'Offline',
+    maintenance: 'Maintenance',
+    startMaintenance: '🔧 Simulan ang Maintenance',
+    endMaintenance: '✅ Tapos na ang Maintenance',
+    underMaintenance: '🔧 Sa Ilalim ng Maintenance',
+    maintenanceBy: 'Ni',
+    maintenanceReason: 'Dahilan',
+    history: 'Kasaysayan',
+    downloadCSV: 'I-download ang CSV',
+    downloadPDF: 'I-download ang PDF',
+    notifications: 'Mga Abiso',
+    loginHistory: 'Kasaysayan ng Login',
+    settings: 'Mga Setting',
+    darkMode: 'Dark Mode',
+    lightMode: 'Light Mode',
+    language: 'Wika',
+    english: 'English',
+    tagalog: 'Tagalog',
+    voiceAlert: 'Voice Alert',
+    enablePush: '🔕 Buksan ang Alerts',
+    disablePush: '🔔 Isara ang Alerts',
+    logout: 'Mag-logout',
+    willAutoLogout: 'Auto-logout sa',
+    minutes: 'minuto',
+    alertOverflow: 'UMAAPAW ANG DRAINAGE',
+    alertCritical: 'KRITIKAL NA ANG LEVEL',
+    noData: 'Walang datos',
+    selectUnit: 'Pumili ng Unit',
+    adminPanel: 'Admin Panel',
+    users: 'Mga User',
+    units: 'Mga Unit',
+    addUser: 'Magdagdag ng User',
+    addUnit: 'Magdagdag ng Unit',
+    photoUpload: 'Mag-upload ng Litrato',
+    maintenanceNote: 'Ano ang ginagawa?',
+    cancel: 'Kanselahin',
+    confirm: 'Kumpirmahin',
+    done: 'Tapos',
+    refresh: 'I-refresh',
+    dateRange: 'Saklaw ng Petsa',
+    from: 'Mula',
+    to: 'Hanggang',
+    filter: 'I-filter',
+    all: 'Lahat',
+    type: 'Uri',
+    message: 'Mensahe',
+    time: 'Oras',
+    sent: 'Naipadala',
+    ip: 'IP Address',
+    role: 'Role',
+    lastLogin: 'Huling Login',
+    normal: 'Normal',
+    warning: 'Babala',
+    critical: 'Kritikal',
+    emergency: 'Emergency',
   }
-  return { text: "Live", color: "#22c55e", bg: "rgba(34,197,94,0.15)", border: "rgba(34,197,94,0.3)", dot: "#22c55e", pulse: true };
 };
 
-function LoginPage({ onLogin }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleLogin = async () => {
-    if (!username || !password) return setError("Please enter username and password.");
-    setLoading(true); setError("");
-    try {
-      const res = await axios.post(`${SERVER}/api/login`, { username, password });
-      sessionStorage.setItem("drainage_user", JSON.stringify(res.data.user));
-      onLogin(res.data.user);
-    } catch { setError("Invalid username or password."); }
-    setLoading(false);
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#0a0f1e", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", padding: "20px" }}>
-      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
-      <div style={{ background: "#131929", borderRadius: "20px", padding: "40px", width: "100%", maxWidth: "400px", border: "1px solid rgba(255,255,255,0.08)" }}>
-        <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <div style={{ fontSize: "48px", marginBottom: "12px" }}>💧</div>
-          <h1 style={{ color: "white", fontSize: "22px", fontWeight: "700" }}>Smart Drainage Monitor</h1>
-          <p style={{ color: "#475569", fontSize: "13px", marginTop: "6px" }}>Sign in to access the dashboard</p>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div>
-            <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600", display: "block", marginBottom: "6px" }}>USERNAME</label>
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Enter username"
-              style={{ width: "100%", background: "#0a0f1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "12px 16px", color: "white", fontSize: "14px" }} />
-          </div>
-          <div>
-            <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600", display: "block", marginBottom: "6px" }}>PASSWORD</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Enter password"
-              style={{ width: "100%", background: "#0a0f1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "12px 16px", color: "white", fontSize: "14px" }} />
-          </div>
-          {error && <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", padding: "10px 14px", color: "#ef4444", fontSize: "13px" }}>❌ {error}</div>}
-          <button onClick={handleLogin} disabled={loading}
-            style={{ background: loading ? "#1e293b" : "linear-gradient(135deg, #22c55e, #16a34a)", color: "white", border: "none", borderRadius: "10px", padding: "14px", fontSize: "15px", fontWeight: "700", cursor: loading ? "not-allowed" : "pointer", marginTop: "8px" }}>
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </div>
-        <p style={{ color: "#334155", fontSize: "11px", textAlign: "center", marginTop: "24px" }}>Smart Drainage Monitoring System v2.0</p>
-      </div>
-    </div>
-  );
-}
-
-function AdminPanel({ user, onLogout }) {
-  const [tab, setTab] = useState("units");
+function App() {
+  // ========== STATE ==========
+  const [user, setUser] = useState(null);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '', rememberMe: false });
+  const [selectedUnit, setSelectedUnit] = useState('drainage_1');
   const [units, setUnits] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [newUnit, setNewUnit] = useState({ unit_id: "", name: "", location: "" });
-  const [newUser, setNewUser] = useState({ username: "", password: "", role: "user" });
-  const [msg, setMsg] = useState("");
-
-  const loadData = async () => {
-    const [u, us] = await Promise.all([axios.get(`${SERVER}/api/units`), axios.get(`${SERVER}/api/users`)]);
-    setUnits(u.data); setUsers(us.data);
-  };
-
-  useEffect(() => { loadData(); }, []);
-
-  const addUnit = async () => {
-    if (!newUnit.unit_id || !newUnit.name) return setMsg("Unit ID and name are required!");
-    try { await axios.post(`${SERVER}/api/units`, newUnit); setNewUnit({ unit_id: "", name: "", location: "" }); setMsg("✅ Drainage unit added!"); loadData(); }
-    catch { setMsg("❌ Error adding unit. Unit ID may already exist."); }
-  };
-
-  const deleteUnit = async (unit_id) => {
-    if (!confirm(`Remove ${unit_id}?`)) return;
-    await axios.delete(`${SERVER}/api/units/${unit_id}`); setMsg("✅ Unit removed!"); loadData();
-  };
-
-  const addUser = async () => {
-    if (!newUser.username || !newUser.password) return setMsg("Username and password required!");
-    try { await axios.post(`${SERVER}/api/users`, newUser); setNewUser({ username: "", password: "", role: "user" }); setMsg("✅ User created!"); loadData(); }
-    catch { setMsg("❌ Error creating user."); }
-  };
-
-  const deleteUser = async (id, username) => {
-    if (username === user.username) return setMsg("❌ Cannot delete your own account!");
-    if (!confirm(`Delete user ${username}?`)) return;
-    await axios.delete(`${SERVER}/api/users/${id}`); setMsg("✅ User deleted!"); loadData();
-  };
-
-  const inp = { width: "100%", background: "#0a0f1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px 14px", color: "white", fontSize: "13px" };
-  const btn = (color) => ({ background: color, color: "white", border: "none", borderRadius: "8px", padding: "10px 18px", fontSize: "13px", fontWeight: "600", cursor: "pointer" });
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "white", fontFamily: "'Segoe UI', sans-serif" }}>
-      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
-      <div style={{ background: "#131929", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: "60px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "20px" }}>💧</span>
-          <span style={{ fontWeight: "700", fontSize: "16px" }}>Smart Drainage — Admin Panel</span>
-        </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <span style={{ color: "#475569", fontSize: "13px" }}>👤 {user.username}</span>
-          <button onClick={() => window.location.reload()} style={btn("#1e40af")}>📊 Dashboard</button>
-          <button onClick={onLogout} style={btn("#7f1d1d")}>Logout</button>
-        </div>
-      </div>
-      <div style={{ padding: "24px", maxWidth: "900px", margin: "0 auto" }}>
-        {msg && <div style={{ background: msg.includes("✅") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${msg.includes("✅") ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, borderRadius: "10px", padding: "12px 16px", marginBottom: "20px", fontSize: "14px", color: msg.includes("✅") ? "#22c55e" : "#ef4444" }}>{msg}</div>}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
-          <button onClick={() => setTab("units")} style={{ ...btn(tab === "units" ? "#22c55e" : "#1e293b"), color: tab === "units" ? "#000" : "#94a3b8" }}>🚰 Drainage Units</button>
-          <button onClick={() => setTab("users")} style={{ ...btn(tab === "users" ? "#22c55e" : "#1e293b"), color: tab === "users" ? "#000" : "#94a3b8" }}>👥 Users</button>
-        </div>
-
-        {tab === "units" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <div style={{ background: "#131929", borderRadius: "16px", padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <h3 style={{ marginBottom: "16px", fontSize: "15px" }}>➕ Add Drainage Unit</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>UNIT ID (no spaces)</label><input value={newUnit.unit_id} onChange={e => setNewUnit({ ...newUnit, unit_id: e.target.value })} placeholder="e.g. drainage_4" style={inp} /></div>
-                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>NAME</label><input value={newUnit.name} onChange={e => setNewUnit({ ...newUnit, name: e.target.value })} placeholder="e.g. Drainage 4" style={inp} /></div>
-                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>LOCATION</label><input value={newUnit.location} onChange={e => setNewUnit({ ...newUnit, location: e.target.value })} placeholder="e.g. Purok 3" style={inp} /></div>
-              </div>
-              <button onClick={addUnit} style={btn("#22c55e")}>Add Unit</button>
-            </div>
-            <div style={{ background: "#131929", borderRadius: "16px", padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <h3 style={{ marginBottom: "16px", fontSize: "15px" }}>🚰 Active Drainage Units ({units.length})</h3>
-              {units.length === 0 ? <p style={{ color: "#475569" }}>No units yet.</p> : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {units.map(u => (
-                    <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0a0f1e", borderRadius: "10px", padding: "12px 16px" }}>
-                      <div><p style={{ fontWeight: "600", fontSize: "14px" }}>{u.name}</p><p style={{ color: "#475569", fontSize: "12px" }}>ID: {u.unit_id} {u.location ? `• 📍 ${u.location}` : ""}</p></div>
-                      <button onClick={() => deleteUnit(u.unit_id)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", cursor: "pointer" }}>Remove</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {tab === "users" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <div style={{ background: "#131929", borderRadius: "16px", padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <h3 style={{ marginBottom: "16px", fontSize: "15px" }}>➕ Create User Account</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>USERNAME</label><input value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} placeholder="e.g. tanod1" style={inp} /></div>
-                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>PASSWORD</label><input value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} placeholder="Set password" style={inp} /></div>
-                <div><label style={{ color: "#64748b", fontSize: "11px", display: "block", marginBottom: "4px" }}>ROLE</label>
-                  <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} style={inp}>
-                    <option value="user">User (View only)</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-              </div>
-              <button onClick={addUser} style={btn("#22c55e")}>Create Account</button>
-            </div>
-            <div style={{ background: "#131929", borderRadius: "16px", padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <h3 style={{ marginBottom: "16px", fontSize: "15px" }}>👥 All Users ({users.length})</h3>
-              {users.length === 0 ? <p style={{ color: "#475569" }}>No users yet.</p> : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {users.map(u => (
-                    <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0a0f1e", borderRadius: "10px", padding: "12px 16px" }}>
-                      <div>
-                        <p style={{ fontWeight: "600", fontSize: "14px" }}>👤 {u.username} {u.username === user.username ? <span style={{ color: "#22c55e", fontSize: "11px" }}>(you)</span> : ""}</p>
-                        <p style={{ color: u.role === "admin" ? "#f59e0b" : "#475569", fontSize: "12px" }}>{u.role === "admin" ? "⭐ Admin" : "👁️ View only"}</p>
-                      </div>
-                      {u.username !== user.username && (
-                        <button onClick={() => deleteUser(u.id, u.username)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", cursor: "pointer" }}>Delete</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default function App() {
-  const [user, setUser] = useState(() => { const s = sessionStorage.getItem("drainage_user"); return s ? JSON.parse(s) : null; });
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [showInstall, setShowInstall] = useState(false);
-  const [units, setUnits] = useState([]);
-  const [selectedUnit, setSelectedUnit] = useState(null);
-  const [data, setData] = useState({ debris_level: 0, overflow: 0, led_status: "GREEN", battery: 100 });
-  const [history, setHistory] = useState([]);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [installPrompt, setInstallPrompt] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [overflowAlert, setOverflowAlert] = useState(false);
+  const [sensorData, setSensorData] = useState(null);
+  const [historyData, setHistoryData] = useState([]);
+  const [chartData, setChartData] = useState({ labels: [], datasets: [] });
   const [deviceStatus, setDeviceStatus] = useState({});
-  const [pushEnabled, setPushEnabled] = useState(false); // NEW: Push notification state
+  const [maintenanceStatus, setMaintenanceStatus] = useState({});
+  const [notificationLog, setNotificationLog] = useState([]);
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [darkMode, setDarkMode] = useState(false);
+  const [lang, setLang] = useState('en');
+  const [voiceAlert, setVoiceAlert] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(INACTIVITY_TIMEOUT);
+  const [maintenanceModal, setMaintenanceModal] = useState(false);
+  const [maintenanceReason, setMaintenanceReason] = useState('');
+  const [historyFilter, setHistoryFilter] = useState({ startDate: '', endDate: '' });
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
+  const t = translations[lang];
+  const inactivityTimer = useRef(null);
+  const countdownTimer = useRef(null);
+  const socketRef = useRef(null);
 
-  // Clock
+  // ========== PERSISTENT LOGIN ==========
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // PWA install
-  useEffect(() => {
-    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); setInstallPrompt(e); });
-  }, []);
-
-  const handleInstall = async () => {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    const result = await installPrompt.userChoice;
-    if (result.outcome === "accepted") setInstallPrompt(null);
-  };
-
-  const loadUnit = (unit_id) => {
-    axios.get(`${SERVER}/api/latest/${unit_id}`).then(res => {
-      if (res.data && res.data.debris_level !== undefined) setData(res.data);
-      else setData({ debris_level: 0, overflow: 0, led_status: "GREEN", battery: 100 });
-    });
-    axios.get(`${SERVER}/api/history/${unit_id}`).then(res => setHistory(res.data));
-  };
-
-  // Check device status for all units
-  const checkAllDeviceStatus = useCallback(async () => {
-    if (!units.length) return;
-    const newStatus = {};
-    for (const unit of units) {
-      try {
-        const res = await axios.get(`${SERVER}/api/status/${unit.unit_id}`);
-        newStatus[unit.unit_id] = {
-          lastSeen: res.data.lastSeen,
-          lastBattery: res.data.lastBattery,
-          online: res.data.online
-        };
-      } catch (e) {
-        newStatus[unit.unit_id] = { lastSeen: null, lastBattery: null, online: false };
+    const savedUser = localStorage.getItem('drainage_user');
+    const savedTime = localStorage.getItem('drainage_loginTime');
+    const savedRemember = localStorage.getItem('drainage_remember') === 'true';
+    
+    if (savedUser && savedTime) {
+      const elapsed = Date.now() - parseInt(savedTime);
+      if (savedRemember && elapsed < INACTIVITY_TIMEOUT) {
+        setUser(JSON.parse(savedUser));
+        setTimeLeft(INACTIVITY_TIMEOUT - elapsed);
+      } else {
+        localStorage.removeItem('drainage_user');
+        localStorage.removeItem('drainage_loginTime');
+        localStorage.removeItem('drainage_remember');
       }
     }
-    setDeviceStatus(newStatus);
-  }, [units]);
+  }, []);
 
-  // Poll device status every 5 seconds
-  useEffect(() => {
-    if (!user || !units.length) return;
-    checkAllDeviceStatus();
-    const interval = setInterval(checkAllDeviceStatus, 5000);
-    return () => clearInterval(interval);
-  }, [user, units, checkAllDeviceStatus]);
-
-  // NEW: Subscribe to push notifications
-  const subscribeToPush = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert('Push notifications not supported on this browser. Use Chrome on Android or Safari on iPhone.');
-      return;
-    }
+  // ========== ACTIVITY TRACKER (1 HOUR AUTO-LOGOUT) ==========
+  const resetInactivityTimer = useCallback(() => {
+    if (!user) return;
     
-    try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: 'BAZkHc3m_P6t94MBIqsFtJeMfORm_6gZcgxKmqOkE_pI8v-VqTUYL8vMRIyLsBu_EBgotADYUmXCflkVGPcEqnU'
+    clearTimeout(inactivityTimer.current);
+    clearInterval(countdownTimer.current);
+    
+    setTimeLeft(INACTIVITY_TIMEOUT);
+    
+    inactivityTimer.current = setTimeout(() => {
+      // Inline logout to avoid stale closure
+      setUser(null);
+      setSensorData(null);
+      setHistoryData([]);
+      localStorage.removeItem('drainage_user');
+      localStorage.removeItem('drainage_loginTime');
+      localStorage.removeItem('drainage_remember');
+      if (socketRef.current) socketRef.current.disconnect();
+    }, INACTIVITY_TIMEOUT);
+    
+    countdownTimer.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1000) {
+          clearInterval(countdownTimer.current);
+          return 0;
+        }
+        return prev - 1000;
       });
-      
-      await axios.post(`${SERVER}/api/subscribe`, {
-        unit_id: selectedUnit,
-        subscription: subscription
-      });
-      
-      setPushEnabled(true);
-      alert('✅ Push notifications enabled! You will get alerts when drainage is full or overflow detected.');
-    } catch (err) {
-      console.error('Push subscription failed:', err);
-      alert('❌ Failed to enable notifications. Make sure you installed the app first (Add to Home Screen).');
-    }
-  };
+    }, 1000);
+    
+    localStorage.setItem('drainage_loginTime', Date.now().toString());
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
-    axios.get(`${SERVER}/api/units`).then(res => {
-      setUnits(res.data);
-      if (res.data.length > 0) { setSelectedUnit(res.data[0].unit_id); loadUnit(res.data[0].unit_id); }
-    });
     
-    socket.on("sensor_update", newData => {
-      // Update device status for this unit
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    const handleActivity = () => resetInactivityTimer();
+    
+    events.forEach(e => document.addEventListener(e, handleActivity));
+    resetInactivityTimer();
+    
+    return () => {
+      events.forEach(e => document.removeEventListener(e, handleActivity));
+      clearTimeout(inactivityTimer.current);
+      clearInterval(countdownTimer.current);
+    };
+  }, [user, resetInactivityTimer]);
+
+  // ========== OFFLINE DETECTION ==========
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // ========== SOCKET.IO ==========
+  useEffect(() => {
+    if (!user) return;
+    
+    const s = io(SOCKET_URL);
+    socketRef.current = s;
+    
+    s.on('sensorUpdate', (data) => {
+      if (data.unit_id === selectedUnit) {
+        setSensorData(data);
+      }
       setDeviceStatus(prev => ({
         ...prev,
-        [newData.unit_id]: {
-          lastSeen: newData.timestamp || new Date().toISOString(),
-          lastBattery: newData.battery,
-          online: true
-        }
+        [data.unit_id]: { status: 'live', lastSeen: new Date().toISOString() }
       }));
-      
-      if (newData.unit_id === selectedUnit) {
-        setData(newData);
-        setHistory(prev => [...prev.slice(-49), newData]);
-        
-        // NEW: Trigger alert on BOTH overflow AND critical debris level (>=95%)
-        const isCritical = newData.overflow || (newData.debris_level >= 95);
-        if (isCritical) {
-          setOverflowAlert(true);
-          // Play alarm sound
-          try {
-            const ctx = new AudioContext();
-            const oscillator = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(ctx.destination);
-            oscillator.frequency.value = 880;
-            oscillator.type = "square";
-            gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-            oscillator.start(ctx.currentTime);
-            oscillator.stop(ctx.currentTime + 0.5);
-          } catch(e) {}
-        } else {
-          setOverflowAlert(false);
-        }
+    });
+    
+    s.on('alert', (alert) => {
+      if (alert.unit_id === selectedUnit) {
+        addAlert(alert.message, alert.type);
+        if (voiceAlert) speakAlert(alert.message);
       }
     });
     
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handleResize);
-    return () => { socket.off("sensor_update"); window.removeEventListener("resize", handleResize); };
-  }, [user, selectedUnit]);
+    s.on('deviceStatus', ({ unit_id, status }) => {
+      setDeviceStatus(prev => ({ ...prev, [unit_id]: { status, lastSeen: new Date().toISOString() } }));
+    });
+    
+    s.on('maintenanceUpdate', ({ unit_id, maintenance, startedBy, reason }) => {
+      setMaintenanceStatus(prev => ({
+        ...prev,
+        [unit_id]: maintenance 
+          ? { active: true, startedBy, reason, startedAt: new Date().toISOString() }
+          : { active: false }
+      }));
+    });
+    
+    return () => s.disconnect();
+  }, [user, selectedUnit, voiceAlert]);
 
-  const handleLogout = () => { sessionStorage.removeItem("drainage_user"); setUser(null); };
-  const switchUnit = (unit_id) => { setSelectedUnit(unit_id); loadUnit(unit_id); setOverflowAlert(false); };
-  const getLedColor = (s) => s === "RED" ? "#ef4444" : s === "YELLOW" ? "#f59e0b" : "#22c55e";
-  const getDebrisColor = (l) => l > 70 ? "#ef4444" : l > 40 ? "#f59e0b" : "#22c55e";
-  const getBatteryIcon = (b) => b > 60 ? "🔋" : b > 20 ? "🪫" : "⚠️";
-  const getUnitName = (uid) => { const u = units.find(x => x.unit_id === uid); return u ? u.name : uid; };
-  const getUnitLocation = (uid) => { const u = units.find(x => x.unit_id === uid); return u && u.location ? u.location : null; };
+  // ========== FETCH INITIAL DATA ==========
+  useEffect(() => {
+    if (!user) return;
+    fetchUnits();
+    fetchSensorData();
+    fetchMaintenanceStatus();
+    fetchNotificationLog();
+    if (user.role === 'admin') fetchLoginHistory();
+  }, [user]);
 
-  const formatDate = (date) => date.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const formatTime = (date) => date.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  const formatChartTime = (ts) => { try { return new Date(ts).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
+  useEffect(() => {
+    if (!user) return;
+    fetchSensorData();
+    fetchHistory();
+  }, [selectedUnit]);
 
-  const currentStatus = deviceStatus[selectedUnit] || { lastSeen: null, lastBattery: null };
-  const statusInfo = getDeviceStatusInfo(currentStatus.lastSeen, currentStatus.lastBattery);
+  // ========== FETCH FUNCTIONS ==========
+  const fetchUnits = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/units`);
+      const data = await res.json();
+      setUnits(data);
+    } catch (e) {
+      console.error('Fetch units error:', e);
+    }
+  };
 
-  if (!user) return <LoginPage onLogin={setUser} />;
-  if (showAdmin && user.role === "admin") return <AdminPanel user={user} onLogout={handleLogout} />;
+  const fetchSensorData = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/data/${selectedUnit}?limit=1`);
+      const data = await res.json();
+      if (data.length > 0) setSensorData(data[0]);
+    } catch (e) {
+      console.error('Fetch sensor error:', e);
+    }
+  };
 
-  const cardStyle = { background: "#131929", borderRadius: "16px", padding: isMobile ? "16px" : "24px", border: "1px solid rgba(255,255,255,0.06)" };
+  const fetchHistory = async () => {
+    try {
+      let url = `${API_URL}/api/data/${selectedUnit}/history?limit=50`;
+      if (historyFilter.startDate) url += `&startDate=${historyFilter.startDate}`;
+      if (historyFilter.endDate) url += `&endDate=${historyFilter.endDate}`;
+      
+      const res = await fetch(url);
+      const data = await res.json();
+      setHistoryData(data);
+      
+      const labels = data.slice().reverse().map(d => new Date(d.timestamp).toLocaleTimeString());
+      const levels = data.slice().reverse().map(d => d.debris_level);
+      
+      setChartData({
+        labels,
+        datasets: [{
+          label: t.debrisLevel,
+          data: levels,
+          borderColor: darkMode ? '#4fc3f7' : '#1976d2',
+          backgroundColor: darkMode ? 'rgba(79,195,247,0.1)' : 'rgba(25,118,210,0.1)',
+          tension: 0.4,
+          fill: true,
+        }]
+      });
+    } catch (e) {
+      console.error('Fetch history error:', e);
+    }
+  };
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "white", fontFamily: "'Segoe UI', sans-serif", paddingBottom: "40px" }}>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}} @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}} *{box-sizing:border-box;margin:0;padding:0} .ubtn{border:none;cursor:pointer;transition:all 0.2s} .ubtn:hover{transform:translateY(-1px)}`}</style>
+  const fetchMaintenanceStatus = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/maintenance/status`);
+      const data = await res.json();
+      setMaintenanceStatus(data);
+    } catch (e) {
+      console.error('Fetch maintenance error:', e);
+    }
+  };
 
-      {/* Overflow Alert Banner */}
-      {overflowAlert && (
-        <div style={{ background: "#ef4444", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", animation: "blink 1s infinite" }}>
-          <p style={{ fontWeight: "700", fontSize: "15px" }}>⚠️ CRITICAL ALERT — {getUnitName(selectedUnit)} {getUnitLocation(selectedUnit) ? `• 📍 ${getUnitLocation(selectedUnit)}` : ""} — {data.overflow ? "OVERFLOW DETECTED!" : `DRAINAGE FULL (${data.debris_level}%)!`} Immediate attention required!</p>
-          <button onClick={() => setOverflowAlert(false)} style={{ background: "rgba(0,0,0,0.2)", border: "none", color: "white", borderRadius: "6px", padding: "4px 10px", cursor: "pointer", fontSize: "13px" }}>Dismiss</button>
+  const fetchNotificationLog = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/notifications/log`);
+      const data = await res.json();
+      setNotificationLog(data);
+    } catch (e) {
+      console.error('Fetch notifications error:', e);
+    }
+  };
+
+  const fetchLoginHistory = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/login-history`);
+      const data = await res.json();
+      setLoginHistory(data);
+    } catch (e) {
+      console.error('Fetch login history error:', e);
+    }
+  };
+
+  // ========== AUTH FUNCTIONS ==========
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm)
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        setUser(data.user);
+        localStorage.setItem('drainage_user', JSON.stringify(data.user));
+        localStorage.setItem('drainage_loginTime', Date.now().toString());
+        localStorage.setItem('drainage_remember', loginForm.rememberMe.toString());
+      } else {
+        alert('Invalid credentials!');
+      }
+    } catch (e) {
+      alert('Login failed!');
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setSensorData(null);
+    setHistoryData([]);
+    localStorage.removeItem('drainage_user');
+    localStorage.removeItem('drainage_loginTime');
+    localStorage.removeItem('drainage_remember');
+    if (socketRef.current) socketRef.current.disconnect();
+  };
+
+  // ========== ALERT FUNCTIONS ==========
+  const addAlert = (message, type) => {
+    const id = Date.now();
+    setAlerts(prev => [...prev, { id, message, type, time: new Date().toLocaleTimeString() }]);
+    setTimeout(() => {
+      setAlerts(prev => prev.filter(a => a.id !== id));
+    }, 5000);
+  };
+
+  const speakAlert = (message) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.lang = lang === 'tl' ? 'fil-PH' : 'en-US';
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // ========== PUSH NOTIFICATIONS ==========
+  const togglePush = async () => {
+    if (!pushEnabled) {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          const reg = await navigator.serviceWorker.register('/sw.js');
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+          });
+          
+          await fetch(`${API_URL}/api/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sub)
+          });
+          
+          setPushEnabled(true);
+          localStorage.setItem('drainage_push', 'true');
+        }
+      } catch (e) {
+        console.error('Push error:', e);
+      }
+    } else {
+      setPushEnabled(false);
+      localStorage.removeItem('drainage_push');
+    }
+  };
+
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+  };
+
+  // ========== MAINTENANCE FUNCTIONS ==========
+  const startMaintenance = async () => {
+    try {
+      await fetch(`${API_URL}/api/maintenance/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unit_id: selectedUnit,
+          startedBy: user?.username || 'Unknown',
+          reason: maintenanceReason || 'Cleaning'
+        })
+      });
+      setMaintenanceModal(false);
+      setMaintenanceReason('');
+      fetchMaintenanceStatus();
+    } catch (e) {
+      alert('Failed to start maintenance');
+    }
+  };
+
+  const endMaintenance = async () => {
+    try {
+      await fetch(`${API_URL}/api/maintenance/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unit_id: selectedUnit })
+      });
+      fetchMaintenanceStatus();
+    } catch (e) {
+      alert('Failed to end maintenance');
+    }
+  };
+
+  // ========== DOWNLOAD FUNCTIONS ==========
+  const downloadCSV = () => {
+    if (historyData.length === 0) return;
+    
+    const headers = ['Timestamp', 'Debris Level (%)', 'Distance (cm)', 'Overflow', 'LED', 'Battery (%)', 'Maintenance'];
+    const rows = historyData.map(d => [
+      d.timestamp,
+      d.debris_level,
+      d.distance,
+      d.overflow ? 'Yes' : 'No',
+      d.led_status,
+      d.battery,
+      d.maintenance ? 'Yes' : 'No'
+    ]);
+    
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `drainage_history_${selectedUnit}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  const downloadPDF = () => {
+    const printWindow = window.open('', '_blank');
+    const rows = historyData.map(d => `
+      <tr>
+        <td>${new Date(d.timestamp).toLocaleString()}</td>
+        <td>${d.debris_level}%</td>
+        <td>${d.distance}cm</td>
+        <td>${d.overflow ? 'Yes' : 'No'}</td>
+        <td>${d.led_status}</td>
+        <td>${d.maintenance ? 'Yes' : 'No'}</td>
+      </tr>
+    `).join('');
+    
+    printWindow.document.write(`
+      <html>
+        <head><title>Drainage History - ${selectedUnit}</title></head>
+        <body>
+          <h1>Drainage History Report</h1>
+          <p>Unit: ${selectedUnit}</p>
+          <p>Generated: ${new Date().toLocaleString()}</p>
+          <table border="1" cellpadding="8">
+            <tr>
+              <th>Timestamp</th>
+              <th>Debris Level</th>
+              <th>Distance</th>
+              <th>Overflow</th>
+              <th>LED</th>
+              <th>Maintenance</th>
+            </tr>
+            ${rows}
+          </table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  // ========== RENDER HELPERS ==========
+  const getStatusColor = (level) => {
+    if (level >= 70) return '#f44336';
+    if (level >= 40) return '#ff9800';
+    return '#4caf50';
+  };
+
+  const getStatusText = (level) => {
+    if (level >= 70) return t.critical;
+    if (level >= 40) return t.warning;
+    return t.normal;
+  };
+
+  const formatTimeLeft = (ms) => {
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.floor((ms % 60000) / 1000);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // ========== LOGIN SCREEN ==========
+  if (!user) {
+    return (
+      <div className={`login-container ${darkMode ? 'dark' : ''}`}>
+        <div className="login-box">
+          <h1>🌊 Smart Drainage</h1>
+          <h2>{t.login}</h2>
+          
+          {!isOnline && (
+            <div className="offline-banner">
+              ⚠️ You are offline. Some features may not work.
+            </div>
+          )}
+          
+          <form onSubmit={handleLogin}>
+            <input
+              type="text"
+              placeholder={t.username}
+              value={loginForm.username}
+              onChange={e => setLoginForm({...loginForm, username: e.target.value})}
+              required
+            />
+            <input
+              type="password"
+              placeholder={t.password}
+              value={loginForm.password}
+              onChange={e => setLoginForm({...loginForm, password: e.target.value})}
+              required
+            />
+            <label className="remember-me">
+              <input
+                type="checkbox"
+                checked={loginForm.rememberMe}
+                onChange={e => setLoginForm({...loginForm, rememberMe: e.target.checked})}
+              />
+              {t.rememberMe}
+            </label>
+            <button type="submit">{t.login}</button>
+          </form>
+          
+          <div className="login-settings">
+            <button onClick={() => setDarkMode(!darkMode)}>
+              {darkMode ? '☀️' : '🌙'}
+            </button>
+            <button onClick={() => setLang(lang === 'en' ? 'tl' : 'en')}>
+              {lang === 'en' ? '🇵🇭 TL' : '🇺🇸 EN'}
+            </button>
+          </div>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  // ========== MAIN DASHBOARD ==========
+  return (
+    <div className={`app ${darkMode ? 'dark' : ''}`}>
+      {/* Alerts */}
+      <div className="alerts-container">
+        {alerts.map(alert => (
+          <div key={alert.id} className={`alert alert-${alert.type}`}>
+            <span>{alert.message}</span>
+            <span className="alert-time">{alert.time}</span>
+          </div>
+        ))}
+      </div>
 
       {/* Header */}
-      <div style={{ background: "linear-gradient(135deg, #0f2027, #203a43, #2c5364)", padding: isMobile ? "16px" : "0 32px", height: isMobile ? "auto" : "64px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", position: "sticky", top: 0, zIndex: 10 }}>
-        <div>
-          <h1 style={{ fontSize: isMobile ? "18px" : "20px", fontWeight: "700" }}>💧 Smart Drainage Monitor</h1>
-          <p style={{ fontSize: "11px", color: "#94a3b8" }}>👤 {user.username} • {user.role === "admin" ? "⭐ Admin" : "View only"}</p>
-        </div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Date and Time */}
-          <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "4px 12px", textAlign: "right" }}>
-            <p style={{ fontSize: "13px", fontWeight: "700", color: "white" }}>{formatTime(currentTime)}</p>
-            <p style={{ fontSize: "10px", color: "#64748b" }}>{formatDate(currentTime)}</p>
-          </div>
+      <header className="app-header">
+        <h1>🌊 Smart Drainage</h1>
+        
+        <div className="header-controls">
+          <span className="timer">
+            ⏱️ {t.willAutoLogout}: {formatTimeLeft(timeLeft)}
+          </span>
           
-          {/* Device Status Badge */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: statusInfo.bg, border: `1px solid ${statusInfo.border}`, borderRadius: "99px", padding: "4px 10px", fontSize: "12px", color: statusInfo.color }}>
-            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: statusInfo.dot, animation: statusInfo.pulse ? "pulse 2s infinite" : "none" }}></div>
-            {statusInfo.text}
-          </div>
+          <select 
+            value={selectedUnit} 
+            onChange={e => setSelectedUnit(e.target.value)}
+            className="unit-select"
+          >
+            {units.map(u => (
+              <option key={u.unit_id} value={u.unit_id}>{u.name || u.unit_id}</option>
+            ))}
+          </select>
           
-          {user.role === "admin" && (
-            <button className="ubtn" onClick={() => setShowAdmin(true)} style={{ background: "#1e40af", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "600" }}>⚙️ Admin Panel</button>
-          )}
-          <button className="ubtn" onClick={() => setIsMobile(!isMobile)} style={{ background: "#1e293b", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "6px 12px", fontSize: "12px" }}>
-            {isMobile ? "🖥️ Desktop" : "📱 Mobile"}
+          <button onClick={togglePush} className={pushEnabled ? 'active' : ''}>
+            {pushEnabled ? t.disablePush : t.enablePush}
           </button>
-          <button className="ubtn" onClick={() => setShowInstall(true)} style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "600" }}>
-            📲 Install App
-          </button>
-          {/* NEW: Push Notification Button */}
-          <button className="ubtn" onClick={subscribeToPush} 
-            style={{ background: pushEnabled ? "rgba(34,197,94,0.2)" : "#1e293b", color: pushEnabled ? "#22c55e" : "#94a3b8", border: `1px solid ${pushEnabled ? "rgba(34,197,94,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "600" }}>
-            {pushEnabled ? "🔔 Alerts On" : "🔕 Enable Alerts"}
-          </button>
-          <button className="ubtn" onClick={handleLogout} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", cursor: "pointer" }}>Logout</button>
+          
+          <button onClick={() => setActiveTab('settings')}>⚙️</button>
+          <button onClick={handleLogout}>{t.logout}</button>
         </div>
-      </div>
+      </header>
 
-      {/* Unit selector with status dots */}
-      <div style={{ padding: isMobile ? "12px" : "16px 32px", background: "#131929", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: "8px", overflowX: "auto" }}>
-        {units.map(u => {
-          const uStatus = deviceStatus[u.unit_id] || { lastSeen: null, lastBattery: null };
-          const uInfo = getDeviceStatusInfo(uStatus.lastSeen, uStatus.lastBattery);
-          return (
-            <button key={u.unit_id} className="ubtn" onClick={() => switchUnit(u.unit_id)}
-              style={{ background: selectedUnit === u.unit_id ? "#22c55e" : "rgba(255,255,255,0.06)", color: selectedUnit === u.unit_id ? "#000" : "#94a3b8", border: `1px solid ${selectedUnit === u.unit_id ? "#22c55e" : "rgba(255,255,255,0.06)"}`, borderRadius: "99px", padding: "6px 16px", fontSize: "13px", fontWeight: selectedUnit === u.unit_id ? "700" : "400", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
-              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: uInfo.dot, flexShrink: 0 }}></div>
-              📍 {u.name}
-            </button>
-          );
-        })}
-      </div>
+      {/* Navigation Tabs */}
+      <nav className="app-nav">
+        <button 
+          className={activeTab === 'dashboard' ? 'active' : ''}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          📊 {t.dashboard}
+        </button>
+        <button 
+          className={activeTab === 'history' ? 'active' : ''}
+          onClick={() => setActiveTab('history')}
+        >
+          📈 {t.history}
+        </button>
+        <button 
+          className={activeTab === 'notifications' ? 'active' : ''}
+          onClick={() => setActiveTab('notifications')}
+        >
+          🔔 {t.notifications}
+        </button>
+        {user.role === 'admin' && (
+          <button 
+            className={activeTab === 'admin' ? 'active' : ''}
+            onClick={() => setActiveTab('admin')}
+          >
+            🔐 {t.adminPanel}
+          </button>
+        )}
+      </nav>
 
-      {/* Content */}
-      <div style={{ padding: isMobile ? "16px" : "24px 32px", maxWidth: "1200px", margin: "0 auto" }}>
-
-        {/* Unit info bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
-          <div>
-            <p style={{ fontSize: "12px", color: statusInfo.text === "Live" ? "#22c55e" : "#ef4444" }}>
-              📊 Now viewing: <strong>{getUnitName(selectedUnit)}</strong>
-              {statusInfo.text !== "Live" && <span style={{ marginLeft: "8px", fontSize: "11px" }}>• {statusInfo.text}</span>}
-            </p>
-            {getUnitLocation(selectedUnit) && <p style={{ fontSize: "11px", color: "#475569", marginTop: "2px" }}>📍 Location: {getUnitLocation(selectedUnit)}</p>}
-          </div>
-          <p style={{ fontSize: "11px", color: "#334155" }}>
-            Last updated: {currentStatus.lastSeen ? new Date(currentStatus.lastSeen).toLocaleString("en-PH") : "—"}
-          </p>
-        </div>
-
-        {/* Cards - dim when offline */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "12px", marginBottom: "16px", opacity: statusInfo.text === "Live" ? 1 : 0.6 }}>
-          <div style={cardStyle}>
-            <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px", fontWeight: "600" }}>DEBRIS LEVEL</p>
-            <p style={{ fontSize: isMobile ? "32px" : "40px", fontWeight: "800", color: getDebrisColor(data.debris_level), lineHeight: 1, marginBottom: "10px" }}>{data.debris_level ?? 0}%</p>
-            <div style={{ background: "#1e293b", borderRadius: "99px", height: "6px" }}><div style={{ background: getDebrisColor(data.debris_level), height: "6px", borderRadius: "99px", width: `${data.debris_level ?? 0}%`, transition: "width 0.6s" }}></div></div>
-          </div>
-          <div style={cardStyle}>
-            <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px", fontWeight: "600" }}>BATTERY {getBatteryIcon(data.battery)}</p>
-            <p style={{ fontSize: isMobile ? "32px" : "40px", fontWeight: "800", color: data.battery > 20 ? "#22c55e" : "#ef4444", lineHeight: 1, marginBottom: "10px" }}>{data.battery ?? 0}%</p>
-            <div style={{ background: "#1e293b", borderRadius: "99px", height: "6px" }}><div style={{ background: data.battery > 20 ? "#22c55e" : "#ef4444", height: "6px", borderRadius: "99px", width: `${data.battery ?? 0}%`, transition: "width 0.6s" }}></div></div>
-          </div>
-          <div style={{ ...cardStyle, background: data.overflow ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.07)", border: `1px solid ${data.overflow ? "rgba(239,68,68,0.3)" : "rgba(34,197,94,0.2)"}` }}>
-            <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px", fontWeight: "600" }}>OVERFLOW</p>
-            <p style={{ fontSize: isMobile ? "18px" : "22px", fontWeight: "800", color: data.overflow ? "#ef4444" : "#22c55e" }}>{data.overflow ? "⚠️ OVERFLOW!" : "✅ Normal"}</p>
-            <p style={{ fontSize: "11px", color: "#475569", marginTop: "4px" }}>{data.overflow ? "Immediate attention!" : "Operating normally"}</p>
-          </div>
-          <div style={{ ...cardStyle, display: "flex", alignItems: "center", gap: "12px" }}>
-            <div style={{ width: "44px", height: "44px", borderRadius: "50%", flexShrink: 0, background: getLedColor(data.led_status), boxShadow: `0 0 20px ${getLedColor(data.led_status)}88` }}></div>
-            <div>
-              <p style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px", fontWeight: "600" }}>LED STATUS</p>
-              <p style={{ fontSize: "22px", fontWeight: "800", color: getLedColor(data.led_status) }}>{data.led_status ?? "GREEN"}</p>
-              <p style={{ fontSize: "11px", color: "#475569" }}>{data.led_status === "RED" ? "Critical" : data.led_status === "YELLOW" ? "Warning" : "All clear"}</p>
+      {/* DASHBOARD TAB */}
+      {activeTab === 'dashboard' && (
+        <div className="dashboard">
+          {!isOnline && (
+            <div className="offline-banner">
+              ⚠️ Offline mode - Showing cached data
             </div>
-          </div>
-        </div>
-
-        {/* Chart */}
-        <div style={cardStyle}>
-          <p style={{ fontWeight: "700", marginBottom: "16px" }}>Debris History — {getUnitName(selectedUnit)}</p>
-          {history.length === 0 ? (
-            <p style={{ color: "#334155", textAlign: "center", padding: "40px 0" }}>No data yet for this unit</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={history}>
-                <XAxis dataKey="timestamp" tickFormatter={formatChartTime} tick={{ fill: "#475569", fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis domain={[0, 100]} stroke="#1e293b" tick={{ fill: "#475569", fontSize: 10 }} width={28} />
-                <Tooltip contentStyle={{ background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: "8px", fontSize: "12px" }} labelFormatter={(ts) => new Date(ts).toLocaleString("en-PH")} formatter={v => [`${v}%`, "Debris"]} />
-                <Line type="monotone" dataKey="debris_level" stroke="#22c55e" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
           )}
-        </div>
-      </div>
-
-      {/* Install Guide Modal */}
-      {showInstall && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-          <div style={{ background: "#131929", borderRadius: "20px", padding: "32px", maxWidth: "480px", width: "100%", border: "1px solid rgba(255,255,255,0.1)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "700" }}>📲 Install Smart Drainage App</h2>
-              <button onClick={() => setShowInstall(false)} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "22px", cursor: "pointer" }}>✕</button>
+          
+          {maintenanceStatus[selectedUnit]?.active && (
+            <div className="maintenance-banner">
+              🔧 {t.underMaintenance} 
+              {maintenanceStatus[selectedUnit].startedBy && ` - ${t.maintenanceBy}: ${maintenanceStatus[selectedUnit].startedBy}`}
+              {maintenanceStatus[selectedUnit].reason && ` - ${maintenanceStatus[selectedUnit].reason}`}
             </div>
-            <div style={{ background: "#0a0f1e", borderRadius: "12px", padding: "16px", marginBottom: "12px", border: "1px solid rgba(34,197,94,0.2)" }}>
-              <p style={{ fontWeight: "700", marginBottom: "10px", color: "#22c55e", fontSize: "14px" }}>🤖 Android (Chrome)</p>
-              <ol style={{ paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: "#94a3b8" }}>
-                <li>Open <strong style={{ color: "white" }}>Chrome</strong> on your Android phone</li>
-                <li>Go to <strong style={{ color: "#22c55e" }}>smart-drainage.vercel.app</strong></li>
-                <li>Tap the <strong style={{ color: "white" }}>3 dots menu ⋮</strong> at top right</li>
-                <li>Tap <strong style={{ color: "white" }}>"Add to Home Screen"</strong></li>
-                <li>Tap <strong style={{ color: "white" }}>"Add"</strong> ✅</li>
-              </ol>
-              {installPrompt && (
-                <button onClick={handleInstall} style={{ marginTop: "12px", background: "#22c55e", color: "#000", border: "none", borderRadius: "8px", padding: "10px", fontSize: "13px", fontWeight: "700", cursor: "pointer", width: "100%" }}>
-                  ⚡ Quick Install — Tap Here!
-                </button>
+          )}
+
+          <div className="status-cards">
+            <div className="status-card">
+              <h3>{t.debrisLevel}</h3>
+              <div className="big-number" style={{ color: getStatusColor(sensorData?.debris_level || 0) }}>
+                {sensorData ? `${sensorData.debris_level.toFixed(1)}%` : '--'}
+              </div>
+              <div className="status-text">
+                {sensorData ? getStatusText(sensorData.debris_level) : t.noData}
+              </div>
+              {sensorData?.maintenance && <span className="maintenance-badge">🔧</span>}
+            </div>
+
+            <div className="status-card">
+              <h3>Distance</h3>
+              <div className="big-number">
+                {sensorData ? `${sensorData.distance?.toFixed(2)} cm` : '--'}
+              </div>
+            </div>
+
+            <div className="status-card">
+              <h3>{t.overflow}</h3>
+              <div className={`big-number ${sensorData?.overflow ? 'danger' : 'safe'}`}>
+                {sensorData ? (sensorData.overflow ? 'YES 🚨' : 'NO ✓') : '--'}
+              </div>
+            </div>
+
+            <div className="status-card">
+              <h3>{t.ledStatus}</h3>
+              <div className="led-indicator" style={{
+                backgroundColor: sensorData?.led_status === 'RED' ? '#f44336' :
+                                sensorData?.led_status === 'YELLOW' ? '#ff9800' : '#4caf50',
+                boxShadow: `0 0 20px ${sensorData?.led_status === 'RED' ? '#f4433680' :
+                          sensorData?.led_status === 'YELLOW' ? '#ff980080' : '#4caf5080'}`
+              }}>
+                {sensorData?.led_status || '--'}
+              </div>
+            </div>
+
+            <div className="status-card">
+              <h3>{t.battery}</h3>
+              <div className="big-number">
+                {sensorData ? `${sensorData.battery}%` : '--'}
+              </div>
+              <div className="battery-bar">
+                <div style={{ width: `${sensorData?.battery || 0}%`, backgroundColor: 
+                  (sensorData?.battery || 0) > 50 ? '#4caf50' : (sensorData?.battery || 0) > 20 ? '#ff9800' : '#f44336'
+                }}></div>
+              </div>
+            </div>
+
+            <div className="status-card">
+              <h3>{t.deviceStatus}</h3>
+              <div className={`device-status ${deviceStatus[selectedUnit]?.status === 'live' ? 'live' : 'offline'}`}>
+                <span className="status-dot"></span>
+                {deviceStatus[selectedUnit]?.status === 'live' ? t.live : t.offline}
+              </div>
+              {deviceStatus[selectedUnit]?.lastSeen && (
+                <small>Last seen: {new Date(deviceStatus[selectedUnit].lastSeen).toLocaleTimeString()}</small>
               )}
             </div>
-            <div style={{ background: "#0a0f1e", borderRadius: "12px", padding: "16px", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <p style={{ fontWeight: "700", marginBottom: "10px", color: "#94a3b8", fontSize: "14px" }}>🍎 iPhone (Safari)</p>
-              <ol style={{ paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: "#94a3b8" }}>
-                <li>Open <strong style={{ color: "white" }}>Safari</strong> on your iPhone</li>
-                <li>Go to <strong style={{ color: "#22c55e" }}>smart-drainage.vercel.app</strong></li>
-                <li>Tap the <strong style={{ color: "white" }}>Share button ⬆️</strong> at the bottom</li>
-                <li>Tap <strong style={{ color: "white" }}>"Add to Home Screen"</strong></li>
-                <li>Tap <strong style={{ color: "white" }}>"Add"</strong> ✅</li>
-              </ol>
-            </div>
-            <p style={{ fontSize: "11px", color: "#334155", textAlign: "center", marginTop: "16px" }}>Once installed, it works like a real app — no app store needed!</p>
+          </div>
+
+          <div className="maintenance-section">
+            {maintenanceStatus[selectedUnit]?.active ? (
+              <button className="maintenance-btn end" onClick={endMaintenance}>
+                {t.endMaintenance}
+              </button>
+            ) : (
+              <button className="maintenance-btn start" onClick={() => setMaintenanceModal(true)}>
+                {t.startMaintenance}
+              </button>
+            )}
+          </div>
+
+          <div className="chart-container">
+            <h3>{t.debrisLevel} - {t.history}</h3>
+            <Line data={chartData} options={{
+              responsive: true,
+              plugins: {
+                legend: { position: 'top' },
+                title: { display: true, text: `${selectedUnit} - Last 50 Readings` }
+              },
+              scales: {
+                y: { min: 0, max: 100, title: { display: true, text: 'Fill %' } }
+              }
+            }} />
           </div>
         </div>
       )}
+
+      {/* HISTORY TAB */}
+      {activeTab === 'history' && (
+        <div className="history-tab">
+          <h2>{t.history}</h2>
+          
+          <div className="history-filters">
+            <label>{t.from}: <input 
+              type="date" 
+              value={historyFilter.startDate}
+              onChange={e => setHistoryFilter({...historyFilter, startDate: e.target.value})}
+            /></label>
+            <label>{t.to}: <input 
+              type="date" 
+              value={historyFilter.endDate}
+              onChange={e => setHistoryFilter({...historyFilter, endDate: e.target.value})}
+            /></label>
+            <button onClick={fetchHistory}>{t.filter}</button>
+            <button onClick={downloadCSV}>📄 {t.downloadCSV}</button>
+            <button onClick={downloadPDF}>🖨️ {t.downloadPDF}</button>
+          </div>
+          
+          <div className="history-table-container">
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th>{t.time}</th>
+                  <th>{t.debrisLevel}</th>
+                  <th>Distance</th>
+                  <th>{t.overflow}</th>
+                  <th>LED</th>
+                  <th>{t.battery}</th>
+                  <th>{t.maintenance}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyData.map((d, i) => (
+                  <tr key={i} className={d.maintenance ? 'maintenance-row' : ''}>
+                    <td>{new Date(d.timestamp).toLocaleString()}</td>
+                    <td style={{ color: getStatusColor(d.debris_level) }}>
+                      {d.debris_level.toFixed(1)}%
+                    </td>
+                    <td>{d.distance?.toFixed(2)}cm</td>
+                    <td>{d.overflow ? '⚠️ YES' : '✓ No'}</td>
+                    <td>
+                      <span className={`led-mini ${d.led_status?.toLowerCase()}`}>
+                        {d.led_status}
+                      </span>
+                    </td>
+                    <td>{d.battery}%</td>
+                    <td>{d.maintenance ? '🔧' : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* NOTIFICATIONS TAB */}
+      {activeTab === 'notifications' && (
+        <div className="notifications-tab">
+          <h2>{t.notifications}</h2>
+          <button onClick={fetchNotificationLog} className="refresh-btn">🔄 {t.refresh}</button>
+          
+          <div className="notification-list">
+            {notificationLog.length === 0 ? (
+              <p className="no-data">{t.noData}</p>
+            ) : (
+              notificationLog.slice().reverse().map((n, i) => (
+                <div key={i} className={`notification-item ${n.type}`}>
+                  <div className="notification-header">
+                    <span className="notification-unit">{n.unit_id}</span>
+                    <span className="notification-type">{n.type === 'overflow' ? '🚨' : '⚠️'} {n.type.toUpperCase()}</span>
+                    <span className="notification-time">{new Date(n.time).toLocaleString()}</span>
+                  </div>
+                  <p className="notification-message">{n.message}</p>
+                  <span className="notification-sent">{n.sent ? '✓ Delivered' : '✗ Not delivered'}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN PANEL */}
+      {activeTab === 'admin' && user.role === 'admin' && (
+        <div className="admin-panel">
+          <h2>{t.adminPanel}</h2>
+          
+          <div className="admin-section">
+            <h3>📋 {t.loginHistory}</h3>
+            <button onClick={fetchLoginHistory} className="refresh-btn">🔄 {t.refresh}</button>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>{t.username}</th>
+                  <th>{t.role}</th>
+                  <th>IP</th>
+                  <th>{t.time}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loginHistory.map((h, i) => (
+                  <tr key={i}>
+                    <td>{h.username}</td>
+                    <td>{h.role}</td>
+                    <td>{h.ip}</td>
+                    <td>{new Date(h.time).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="admin-section">
+            <h3>📍 {t.units}</h3>
+            <div className="units-list">
+              {units.map(u => (
+                <div key={u.unit_id} className="unit-card">
+                  <h4>{u.name || u.unit_id}</h4>
+                  <p>{u.location}</p>
+                  <span className={`status-badge ${deviceStatus[u.unit_id]?.status === 'live' ? 'live' : 'offline'}`}>
+                    {deviceStatus[u.unit_id]?.status === 'live' ? t.live : t.offline}
+                  </span>
+                  {maintenanceStatus[u.unit_id]?.active && (
+                    <span className="maintenance-badge-small">🔧 {t.maintenance}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="admin-section">
+            <h3>🔧 Maintenance Status</h3>
+            <div className="maintenance-overview">
+              {Object.entries(maintenanceStatus).map(([unitId, status]) => (
+                status.active && (
+                  <div key={unitId} className="maintenance-card">
+                    <h4>{unitId}</h4>
+                    <p>By: {status.startedBy}</p>
+                    <p>Reason: {status.reason}</p>
+                    <p>Since: {new Date(status.startedAt).toLocaleString()}</p>
+                  </div>
+                )
+              ))}
+              {Object.values(maintenanceStatus).every(s => !s.active) && (
+                <p>No units under maintenance</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SETTINGS TAB */}
+      {activeTab === 'settings' && (
+        <div className="settings-panel">
+          <h2>⚙️ {t.settings}</h2>
+          
+          <div className="setting-item">
+            <label>{t.darkMode}</label>
+            <button onClick={() => setDarkMode(!darkMode)}>
+              {darkMode ? '☀️ ' + t.lightMode : '🌙 ' + t.darkMode}
+            </button>
+          </div>
+          
+          <div className="setting-item">
+            <label>{t.language}</label>
+            <button onClick={() => setLang(lang === 'en' ? 'tl' : 'en')}>
+              {lang === 'en' ? '🇵🇭 ' + t.tagalog : '🇺🇸 ' + t.english}
+            </button>
+          </div>
+          
+          <div className="setting-item">
+            <label>{t.voiceAlert}</label>
+            <button onClick={() => setVoiceAlert(!voiceAlert)} className={voiceAlert ? 'active' : ''}>
+              {voiceAlert ? '🔊 ON' : '🔇 OFF'}
+            </button>
+          </div>
+          
+          <div className="setting-item">
+            <label>Push Notifications</label>
+            <button onClick={togglePush} className={pushEnabled ? 'active' : ''}>
+              {pushEnabled ? t.disablePush : t.enablePush}
+            </button>
+          </div>
+          
+          <button onClick={() => setActiveTab('dashboard')} className="back-btn">
+            ← Back to Dashboard
+          </button>
+        </div>
+      )}
+
+      {/* MAINTENANCE MODAL */}
+      {maintenanceModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>🔧 {t.startMaintenance}</h3>
+            <p>Unit: <strong>{selectedUnit}</strong></p>
+            <label>{t.maintenanceNote}</label>
+            <textarea
+              value={maintenanceReason}
+              onChange={e => setMaintenanceReason(e.target.value)}
+              placeholder="e.g., Cleaning debris, Repairing pipe..."
+              rows={3}
+            />
+            <div className="modal-buttons">
+              <button onClick={() => setMaintenanceModal(false)} className="cancel-btn">{t.cancel}</button>
+              <button onClick={startMaintenance} className="confirm-btn">{t.confirm}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <footer className="app-footer">
+        <p>Smart Drainage System | {user.username} ({user.role}) | {new Date().toLocaleDateString()}</p>
+      </footer>
     </div>
   );
 }
+
+export default App;
