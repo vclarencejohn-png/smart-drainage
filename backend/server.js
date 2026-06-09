@@ -1,8 +1,10 @@
 const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
+const webpush = require('web-push');
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
@@ -11,242 +13,225 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(cors());
 app.use(express.json());
 
-// Supabase connection
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+// Supabase
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-// ============================================
-// DEVICE STATUS TRACKING
-// ============================================
-const deviceStatus = new Map(); // unit_id -> { lastSeen: timestamp, lastBattery: number }
+// Web Push VAPID
+const vapidKeys = {
+  publicKey: process.env.VAPID_PUBLIC_KEY,
+  privateKey: process.env.VAPID_PRIVATE_KEY
+};
+webpush.setVapidDetails('mailto:admin@smartdrainage.com', vapidKeys.publicKey, vapidKeys.privateKey);
 
-function updateDeviceStatus(unit_id, battery) {
-  deviceStatus.set(unit_id, {
-    lastSeen: new Date().toISOString(),
-    lastBattery: battery
-  });
-}
+// In-memory stores
+let subscriptions = [];
+let lastData = {};
+let deviceStatus = {};
+let notificationLog = [];
+let loginHistory = [];
+let maintenanceMode = {};
 
-function getDeviceStatus(unit_id) {
-  const status = deviceStatus.get(unit_id);
-  if (!status) return { online: false, lastSeen: null, lastBattery: null };
-  
-  const secondsAgo = (Date.now() - new Date(status.lastSeen).getTime()) / 1000;
-  const isOnline = secondsAgo < 30; // Offline if no data for 30+ seconds
-  
-  return {
-    online: isOnline,
-    lastSeen: status.lastSeen,
-    lastBattery: status.lastBattery
-  };
-}
-
-// Cleanup old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  deviceStatus.forEach((status, unit_id) => {
-    if (now - new Date(status.lastSeen).getTime() > 300000) { // 5 minutes
-      deviceStatus.delete(unit_id);
-    }
-  });
-}, 300000);
-
-// ============================================
-// PUSH NOTIFICATION SETUP
-// ============================================
-const webpush = require('web-push');
-
-// REPLACE THESE WITH YOUR KEYS (we'll generate next)
-webpush.setVapidDetails(
-  'mailto:vclarencejohn@gmail.com',
-  'BAZkHc3m_P6t94MBIqsFtJeMfORm_6gZcgxKmqOkE_pI8v-VqTUYL8vMRIyLsBu_EBgotADYUmXCflkVGPcEqnU',
-  'Fq5HyDC-y41H4CT8AuKdocPpmOCBYbVtUU75oxfG8go'
-);
-
-// Store push subscriptions
-const pushSubscriptions = new Map();
-
-function sendPushNotification(unit_id, title, body) {
-  const subscription = pushSubscriptions.get(unit_id);
-  if (!subscription) {
-    console.log(`No push subscription for ${unit_id}`);
-    return;
-  }
-  
-  const payload = JSON.stringify({ title, body, icon: '/icon.png' });
-  
-  webpush.sendNotification(subscription, payload)
-    .catch(err => console.error('Push error:', err));
-}
-
-// ============================================
-// AUTH ROUTES
-// ============================================
-
-// Login
+// ========== AUTH ==========
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+  
   const { data, error } = await supabase
     .from('users')
     .select('*')
     .eq('username', username)
     .eq('password', password)
     .single();
-
-  if (error || !data) return res.status(401).json({ error: 'Invalid username or password' });
-  res.json({ user: { id: data.id, username: data.username, role: data.role } });
+  
+  if (error || !data) return res.status(401).json({ error: 'Invalid credentials' });
+  
+  loginHistory.push({
+    username,
+    role: data.role,
+    ip: req.ip,
+    time: new Date().toISOString()
+  });
+  if (loginHistory.length > 100) loginHistory.shift();
+  
+  res.json({ success: true, user: { username: data.username, role: data.role, unit_id: data.unit_id } });
 });
 
-// Get all users (admin only)
-app.get('/api/users', async (req, res) => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, username, role, created_at')
-    .order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
-
-// Create user (admin only)
-app.post('/api/users', async (req, res) => {
-  const { username, password, role } = req.body;
-  const { data, error } = await supabase
-    .from('users')
-    .insert([{ username, password, role: role || 'user' }])
-    .select()
-    .single();
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
-
-// Delete user (admin only)
-app.delete('/api/users/:id', async (req, res) => {
-  const { error } = await supabase
-    .from('users')
-    .delete()
-    .eq('id', req.params.id);
-  if (error) return res.status(500).json({ error: error.message });
+app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// ============================================
-// DRAINAGE UNITS ROUTES
-// ============================================
+// ========== DATA RECEIVE FROM ESP32 ==========
+app.post('/api/data', async (req, res) => {
+  const { unit_id, debris_level, overflow, led_status, battery, distance } = req.body;
+  
+  if (maintenanceMode[unit_id]?.active) {
+    await supabase.from('sensor_data').insert([{
+      unit_id, debris_level, overflow, led_status, battery, distance,
+      maintenance: true, timestamp: new Date().toISOString()
+    }]);
+    
+    io.emit('sensorUpdate', { unit_id, debris_level, overflow, led_status, battery, distance, maintenance: true });
+    return res.json({ success: true, maintenance: true });
+  }
+  
+  const { error } = await supabase.from('sensor_data').insert([{
+    unit_id, debris_level, overflow, led_status, battery, distance,
+    maintenance: false, timestamp: new Date().toISOString()
+  }]);
+  
+  if (error) return res.status(500).json({ error: error.message });
+  
+  lastData[unit_id] = {
+    debris_level, overflow, led_status, battery, distance,
+    timestamp: new Date().toISOString()
+  };
+  
+  deviceStatus[unit_id] = { status: 'live', lastSeen: new Date().toISOString() };
+  
+  if (overflow || debris_level >= 95) {
+    const alertMsg = overflow 
+      ? `🚨 OVERFLOW DETECTED at ${unit_id}!` 
+      : `⚠️ ${unit_id} is ${debris_level.toFixed(1)}% FULL!`;
+    
+    notificationLog.push({
+      unit_id, type: overflow ? 'overflow' : 'critical',
+      message: alertMsg, time: new Date().toISOString(),
+      sent: subscriptions.length > 0
+    });
+    if (notificationLog.length > 200) notificationLog.shift();
+    
+    subscriptions.forEach(sub => {
+      webpush.sendNotification(sub, JSON.stringify({
+        title: 'Smart Drainage Alert',
+        body: alertMsg,
+        icon: '/icon.png',
+        badge: '/badge.png',
+        tag: unit_id,
+        requireInteraction: true
+      })).catch(err => console.error('Push error:', err));
+    });
+    
+    io.emit('alert', { unit_id, message: alertMsg, type: overflow ? 'overflow' : 'critical' });
+  }
+  
+  io.emit('sensorUpdate', { unit_id, debris_level, overflow, led_status, battery, distance, maintenance: false });
+  res.json({ success: true });
+});
 
-// Get all drainage units
-app.get('/api/units', async (req, res) => {
+// ========== MAINTENANCE MODE ==========
+app.post('/api/maintenance/start', (req, res) => {
+  const { unit_id, startedBy, reason } = req.body;
+  
+  maintenanceMode[unit_id] = {
+    active: true,
+    startedBy: startedBy || 'Unknown',
+    reason: reason || 'Maintenance',
+    startedAt: new Date().toISOString()
+  };
+  
+  io.emit('maintenanceUpdate', { unit_id, maintenance: true, startedBy, reason });
+  res.json({ success: true, maintenanceMode: maintenanceMode[unit_id] });
+});
+
+app.post('/api/maintenance/end', (req, res) => {
+  const { unit_id } = req.body;
+  
+  if (maintenanceMode[unit_id]) {
+    maintenanceMode[unit_id].active = false;
+    maintenanceMode[unit_id].endedAt = new Date().toISOString();
+  }
+  
+  io.emit('maintenanceUpdate', { unit_id, maintenance: false });
+  res.json({ success: true });
+});
+
+app.get('/api/maintenance/status', (req, res) => {
+  res.json(maintenanceMode);
+});
+
+// ========== GET DATA ==========
+app.get('/api/data/:unit_id', async (req, res) => {
+  const { unit_id } = req.params;
+  const { limit = 50 } = req.query;
+  
   const { data, error } = await supabase
-    .from('drainage_units')
+    .from('sensor_data')
     .select('*')
-    .eq('active', true)
-    .order('created_at', { ascending: true });
+    .eq('unit_id', unit_id)
+    .order('timestamp', { ascending: false })
+    .limit(parseInt(limit));
+  
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 
-// Add drainage unit (admin only)
+app.get('/api/data/:unit_id/history', async (req, res) => {
+  const { unit_id } = req.params;
+  const { startDate, endDate, limit = 500 } = req.query;
+  
+  let query = supabase
+    .from('sensor_data')
+    .select('*')
+    .eq('unit_id', unit_id)
+    .order('timestamp', { ascending: false });
+  
+  if (startDate) query = query.gte('timestamp', startDate);
+  if (endDate) query = query.lte('timestamp', endDate);
+  if (limit) query = query.limit(parseInt(limit));
+  
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ========== UNITS ==========
+app.get('/api/units', async (req, res) => {
+  const { data, error } = await supabase.from('units').select('*');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 app.post('/api/units', async (req, res) => {
   const { unit_id, name, location } = req.body;
-  const { data, error } = await supabase
-    .from('drainage_units')
-    .insert([{ unit_id, name, location }])
-    .select()
-    .single();
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
-
-// Delete drainage unit (admin only)
-app.delete('/api/units/:unit_id', async (req, res) => {
-  const { error } = await supabase
-    .from('drainage_units')
-    .update({ active: false })
-    .eq('unit_id', req.params.unit_id);
+  const { error } = await supabase.from('units').insert([{ unit_id, name, location }]);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
-// ============================================
-// SENSOR DATA ROUTES
-// ============================================
-
-// ESP32 sends data here
-app.post('/api/data', async (req, res) => {
-  const { unit_id = 'drainage_1', debris_level, overflow, led_status, battery } = req.body;
-
-  // Update device status when data arrives
-  updateDeviceStatus(unit_id, battery);
-
-  const { error } = await supabase
-    .from('readings')
-    .insert([{ unit_id, debris_level, overflow, led_status, battery }]);
-
-  if (error) return res.status(500).json({ error: error.message });
-
-  const entry = { unit_id, debris_level, overflow, led_status, battery, timestamp: new Date().toISOString() };
-  io.emit('sensor_update', entry);
-
-  // NEW: Push notification for BOTH overflow AND full drainage
-  const isCritical = overflow || (debris_level >= 95);
-  if (isCritical) {
-    const alertType = overflow ? 'OVERFLOW' : 'DRAINAGE FULL';
-    const message = overflow 
-      ? `Drainage ${unit_id} detected overflow! Immediate attention required.`
-      : `Drainage ${unit_id} is FULL (${debris_level}%)! Clear debris now.`;
-    
-    // Send push notification
-    sendPushNotification(unit_id, `⚠️ ${alertType} ALERT`, message);
-    
-    // Emit critical alert for frontend alarm
-    io.emit('critical_alert', { unit_id, type: alertType, debris_level, message });
-  }
-
-  console.log(`[${unit_id}] Data received:`, req.body);
-  res.json({ status: 'ok' });
-});
-
-// Get latest reading for a unit
-app.get('/api/latest/:unit_id', async (req, res) => {
-  const { data, error } = await supabase
-    .from('readings')
-    .select('*')
-    .eq('unit_id', req.params.unit_id)
-    .order('timestamp', { ascending: false })
-    .limit(1)
-    .single();
-  if (error) return res.json({});
-  res.json(data);
-});
-
-// Get history for a unit
-app.get('/api/history/:unit_id', async (req, res) => {
-  const { data, error } = await supabase
-    .from('readings')
-    .select('*')
-    .eq('unit_id', req.params.unit_id)
-    .order('timestamp', { ascending: false })
-    .limit(50);
-  if (error) return res.json([]);
-  res.json(data.reverse());
-});
-
-// NEW: Get device status for a unit
-app.get('/api/status/:unit_id', (req, res) => {
-  const status = getDeviceStatus(req.params.unit_id);
-  res.json(status);
-});
-
-// NEW: Save push subscription from frontend
+// ========== NOTIFICATIONS ==========
 app.post('/api/subscribe', (req, res) => {
-  const { unit_id, subscription } = req.body;
-  pushSubscriptions.set(unit_id, subscription);
-  console.log(`Push subscription saved for ${unit_id}`);
+  const subscription = req.body;
+  if (!subscriptions.find(s => s.endpoint === subscription.endpoint)) {
+    subscriptions.push(subscription);
+  }
   res.json({ success: true });
 });
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Smart Drainage server running on port ${PORT}`);
+app.get('/api/notifications/log', (req, res) => {
+  res.json(notificationLog);
 });
+
+// ========== LOGIN HISTORY ==========
+app.get('/api/login-history', (req, res) => {
+  res.json(loginHistory);
+});
+
+// ========== DEVICE STATUS CHECK ==========
+setInterval(() => {
+  const now = new Date();
+  Object.keys(deviceStatus).forEach(unit_id => {
+    const lastSeen = new Date(deviceStatus[unit_id].lastSeen);
+    const diff = (now - lastSeen) / 1000;
+    if (diff > 30) {
+      deviceStatus[unit_id].status = 'offline';
+      io.emit('deviceStatus', { unit_id, status: 'offline' });
+    }
+  });
+}, 10000);
+
+// ========== ACTIVITY HEARTBEAT ==========
+app.post('/api/heartbeat', (req, res) => {
+  res.json({ success: true, timestamp: new Date().toISOString() });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
