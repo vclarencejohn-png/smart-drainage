@@ -495,6 +495,70 @@ function App() {
       }
     } catch (e) { alert('Error adding unit'); }
   };
+  const createUnit = async () => {
+  try {
+    const res = await fetch(`${API_URL}/api/units`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newUnit)
+    });
+    const data = await res.json();
+    if (data.success) {
+      setAddUnitModal(false);
+      setNewUnit({ unit_id: '', name: '', location: '' });
+      fetchUnits();
+    } else {
+      alert('Failed to add unit');
+    }
+  } catch (e) { alert('Error adding unit'); }
+};
+
+// ADD THESE TWO FUNCTIONS HERE
+const deleteUser = async (username) => {
+  if (!username) return;
+  if (username === user?.username) {
+    alert('You cannot delete your own account!');
+    return;
+  }
+  if (!window.confirm(`Are you sure you want to delete user "${username}"?`)) return;
+  
+  try {
+    const res = await fetch(`${API_URL}/api/users/${encodeURIComponent(username)}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (data.success) {
+      fetchUsers();
+      alert('User deleted successfully');
+    } else {
+      alert('Failed to delete user: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    console.error('Delete user error:', e);
+    alert('Error deleting user');
+  }
+};
+
+const deleteUnit = async (unitId) => {
+  if (!unitId) return;
+  if (!window.confirm(`Are you sure you want to delete unit "${unitId}"? This will also delete all its data!`)) return;
+  
+  try {
+    const res = await fetch(`${API_URL}/api/units/${encodeURIComponent(unitId)}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (data.success) {
+      fetchUnits();
+      alert('Unit deleted successfully');
+    } else {
+      alert('Failed to delete unit: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    console.error('Delete unit error:', e);
+    alert('Error deleting unit');
+  }
+};
 
   const downloadCSV = () => {
     if (!Array.isArray(historyData) || historyData.length === 0) return;
@@ -751,79 +815,109 @@ function App() {
       )}
 
       {activeTab === 'admin' && user?.role === 'admin' && (
-        <div className="admin-panel">
-          <h2>{t.adminPanel}</h2>
-          {adminError && <div className="error-banner">⚠️ {adminError}</div>}
-          
-          <div className="admin-section">
-            <h3>👥 {t.users}</h3>
-            <button onClick={() => setAddUserModal(true)} className="refresh-btn" style={{background: '#4caf50', marginBottom: '16px'}}>➕ {t.addUser}</button>
-            <table className="admin-table">
-              <thead><tr><th>{t.username}</th><th>{t.role}</th><th>Unit</th></tr></thead>
-              <tbody>
-                {safeArray(usersList).map((u, i) => (
-                  <tr key={i}><td>{u?.username || '-'}</td><td>{u?.role || '-'}</td><td>{u?.unit_id || 'All'}</td></tr>
-                ))}
-                {safeArray(usersList).length === 0 && <tr><td colSpan="3" style={{textAlign: 'center'}}>No users found</td></tr>}
-              </tbody>
-            </table>
-          </div>
+  <div className="admin-panel">
+    <h2>{t.adminPanel}</h2>
+    {adminError && <div className="error-banner">⚠️ {adminError}</div>}
+    
+    <div className="admin-section">
+      <h3>👥 {t.users}</h3>
+      <button onClick={() => setAddUserModal(true)} className="refresh-btn" style={{background: '#4caf50', marginBottom: '16px'}}>➕ {t.addUser}</button>
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <th>{t.username}</th>
+            <th>{t.role}</th>
+            <th>Unit</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {safeArray(usersList).map((u, i) => (
+            <tr key={i}>
+              <td>{u?.username || '-'}</td>
+              <td>{u?.role || '-'}</td>
+              <td>{u?.unit_id || 'All'}</td>
+              <td>
+                <button 
+                  onClick={() => deleteUser(u?.username)} 
+                  className="delete-btn"
+                  disabled={u?.username === user?.username}
+                  title={u?.username === user?.username ? "Cannot delete yourself" : "Delete user"}
+                >
+                  🗑️
+                </button>
+              </td>
+            </tr>
+          ))}
+          {safeArray(usersList).length === 0 && (
+            <tr><td colSpan="4" style={{textAlign: 'center'}}>No users found</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
 
-          <div className="admin-section">
-            <h3>📍 {t.units}</h3>
-            <button onClick={() => setAddUnitModal(true)} className="refresh-btn" style={{background: '#4caf50', marginBottom: '16px'}}>➕ {t.addUnit}</button>
-            <div className="units-list">
-              {safeArray(units).map(u => (
-                <div key={u?.unit_id || Math.random()} className="unit-card">
-                  <h4>{u?.name || u?.unit_id || 'Unknown'}</h4>
-                  <p>{u?.location || 'No location'}</p>
-                  <span className={`status-badge ${deviceStatus[u?.unit_id]?.status === 'live' ? 'live' : 'offline'}`}>
-                    {deviceStatus[u?.unit_id]?.status === 'live' ? t.live : t.offline}
-                  </span>
-                  {maintenanceStatus[u?.unit_id]?.active && <span className="maintenance-badge-small">🔧 {t.maintenance}</span>}
-                </div>
-              ))}
-              {safeArray(units).length === 0 && <p>No units found</p>}
+    <div className="admin-section">
+      <h3>📍 {t.units}</h3>
+      <button onClick={() => setAddUnitModal(true)} className="refresh-btn" style={{background: '#4caf50', marginBottom: '16px'}}>➕ {t.addUnit}</button>
+      <div className="units-list">
+        {safeArray(units).map(u => (
+          <div key={u?.unit_id || Math.random()} className="unit-card">
+            <h4>{u?.name || u?.unit_id || 'Unknown'}</h4>
+            <p>{u?.location || 'No location'}</p>
+            <span className={`status-badge ${deviceStatus[u?.unit_id]?.status === 'live' ? 'live' : 'offline'}`}>
+              {deviceStatus[u?.unit_id]?.status === 'live' ? t.live : t.offline}
+            </span>
+            {maintenanceStatus[u?.unit_id]?.active && <span className="maintenance-badge-small">🔧 {t.maintenance}</span>}
+            <button 
+              onClick={() => deleteUnit(u?.unit_id)} 
+              className="delete-btn-unit"
+              title="Delete unit"
+            >
+              🗑️ Delete
+            </button>
+          </div>
+        ))}
+        {safeArray(units).length === 0 && <p>No units found</p>}
+      </div>
+    </div>
+
+    <div className="admin-section">
+      <h3>📋 {t.loginHistory}</h3>
+      <button onClick={fetchLoginHistory} className="refresh-btn">🔄 {t.refresh}</button>
+      <table className="admin-table">
+        <thead><tr><th>{t.username}</th><th>{t.role}</th><th>IP</th><th>{t.time}</th></tr></thead>
+        <tbody>
+          {safeArray(loginHistory).map((h, i) => (
+            <tr key={i}>
+              <td>{h?.username || '-'}</td>
+              <td>{h?.role || '-'}</td>
+              <td>{h?.ip || '-'}</td>
+              <td>{h?.time ? new Date(h.time).toLocaleString() : '-'}</td>
+            </tr>
+          ))}
+          {safeArray(loginHistory).length === 0 && <tr><td colSpan="4" style={{textAlign: 'center'}}>No login history</td></tr>}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="admin-section">
+      <h3>🔧 Maintenance Status</h3>
+      <div className="maintenance-overview">
+        {Object.entries(safeObject(maintenanceStatus)).map(([unitId, status]) => (
+          status?.active && (
+            <div key={unitId} className="maintenance-card">
+              <h4>{unitId}</h4>
+              <p>By: {status?.startedBy || 'Unknown'}</p>
+              <p>Reason: {status?.reason || 'N/A'}</p>
+              <p>Since: {status?.startedAt ? new Date(status.startedAt).toLocaleString() : 'Unknown'}</p>
             </div>
-          </div>
-
-          <div className="admin-section">
-            <h3>📋 {t.loginHistory}</h3>
-            <button onClick={fetchLoginHistory} className="refresh-btn">🔄 {t.refresh}</button>
-            <table className="admin-table">
-              <thead><tr><th>{t.username}</th><th>{t.role}</th><th>IP</th><th>{t.time}</th></tr></thead>
-              <tbody>
-                {safeArray(loginHistory).map((h, i) => (
-                  <tr key={i}>
-                    <td>{h?.username || '-'}</td>
-                    <td>{h?.role || '-'}</td>
-                    <td>{h?.ip || '-'}</td>
-                    <td>{h?.time ? new Date(h.time).toLocaleString() : '-'}</td>
-                  </tr>
-                ))}
-                {safeArray(loginHistory).length === 0 && <tr><td colSpan="4" style={{textAlign: 'center'}}>No login history</td></tr>}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="admin-section">
-            <h3>🔧 Maintenance Status</h3>
-            <div className="maintenance-overview">
-              {Object.entries(safeObject(maintenanceStatus)).map(([unitId, status]) => (
-                status?.active && (
-                  <div key={unitId} className="maintenance-card">
-                    <h4>{unitId}</h4>
-                    <p>By: {status?.startedBy || 'Unknown'}</p>
-                    <p>Reason: {status?.reason || 'N/A'}</p>
-                    <p>Since: {status?.startedAt ? new Date(status.startedAt).toLocaleString() : 'Unknown'}</p>
-                  </div>
-                )
-              ))}
-              {Object.values(safeObject(maintenanceStatus)).every(s => !s?.active) && <p>No units under maintenance</p>}
-            </div>
-          </div>
-        </div>
-      )}
+          )
+        ))}
+        {Object.values(safeObject(maintenanceStatus)).every(s => !s?.active) && <p>No units under maintenance</p>}
+      </div>
+    </div>
+  </div>
+)}
 
       {activeTab === 'settings' && (
         <div className="settings-panel">
