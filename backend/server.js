@@ -119,6 +119,7 @@ app.post('/api/data', async (req, res) => {
         badge: '/favicon.svg',
         tag: unit_id,
         requireInteraction: true,
+        url: 'https://smart-drainage.vercel.app',
         actions: [
           { action: 'open', title: 'Open App' },
           { action: 'dismiss', title: 'Dismiss' }
@@ -127,12 +128,13 @@ app.post('/api/data', async (req, res) => {
 
       subscriptions.forEach(sub => {
         webpush.sendNotification(sub, pushPayload)
-          .then(() => console.log('Push sent successfully'))
+          .then(() => console.log('✓ Push sent to:', sub.endpoint.substring(0, 50) + '...'))
           .catch(err => {
-            console.error('Push error:', err);
-            // Remove invalid subscription
+            console.error('✗ Push failed:', err.statusCode, err.message);
+            // Remove invalid/expired subscriptions
             if (err.statusCode === 410 || err.statusCode === 404) {
               subscriptions = subscriptions.filter(s => s.endpoint !== sub.endpoint);
+              console.log('Removed expired subscription. Remaining:', subscriptions.length);
             }
           });
       });
@@ -285,7 +287,7 @@ app.post('/api/subscribe', (req, res) => {
   const subscription = req.body;
   if (!subscriptions.find(s => s.endpoint === subscription.endpoint)) {
     subscriptions.push(subscription);
-    console.log('New push subscription added. Total:', subscriptions.length);
+    console.log('✓ New push subscription. Total:', subscriptions.length);
   }
   res.json({ success: true });
 });
