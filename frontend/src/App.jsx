@@ -95,6 +95,7 @@ function App() {
   const countdownTimer = useRef(null);
   const socketRef = useRef(null);
 
+  // ========== LOAD SAVED USER & SETTINGS ON MOUNT ==========
   useEffect(() => {
     const savedUser = localStorage.getItem('drainage_user');
     const savedTime = localStorage.getItem('drainage_loginTime');
@@ -119,6 +120,48 @@ function App() {
         localStorage.removeItem('drainage_remember');
       }
     }
+    
+    // Load settings from localStorage
+    const savedDarkMode = localStorage.getItem('drainage_darkMode');
+    const savedLang = localStorage.getItem('drainage_lang');
+    const savedVoiceAlert = localStorage.getItem('drainage_voiceAlert');
+    const savedPush = localStorage.getItem('drainage_push');
+    
+    if (savedDarkMode !== null) setDarkMode(savedDarkMode === 'true');
+    if (savedLang !== null) setLang(savedLang);
+    if (savedVoiceAlert !== null) setVoiceAlert(savedVoiceAlert === 'true');
+    if (savedPush !== null) setPushEnabled(savedPush === 'true');
+  }, []);
+
+  // ========== SAVE SETTINGS TO LOCALSTORAGE ==========
+  useEffect(() => {
+    localStorage.setItem('drainage_darkMode', darkMode.toString());
+  }, [darkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('drainage_lang', lang);
+  }, [lang]);
+
+  useEffect(() => {
+    localStorage.setItem('drainage_voiceAlert', voiceAlert.toString());
+  }, [voiceAlert]);
+
+  useEffect(() => {
+    localStorage.setItem('drainage_push', pushEnabled.toString());
+  }, [pushEnabled]);
+
+  // Check existing push subscription on mount
+  useEffect(() => {
+    const checkPushStatus = async () => {
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        const savedPush = localStorage.getItem('drainage_push') === 'true';
+        setPushEnabled(!!sub && savedPush);
+      } catch (e) { console.error('Push status check error:', e); }
+    };
+    checkPushStatus();
   }, []);
 
   const resetInactivityTimer = useCallback(() => {
@@ -191,6 +234,10 @@ function App() {
       if (alert.unit_id === selectedUnit) {
         addAlert(alert.message, alert.type);
         if (voiceAlert) speakAlert(alert.message);
+        // 🔊 Play alarm sound on overflow or critical
+        if (alert.type === 'overflow' || alert.type === 'critical') {
+          playAlarmSound();
+        }
       }
     });
     
@@ -398,10 +445,55 @@ function App() {
     }
   };
 
+  // 🔊 NEW: Alarm sound using Web Audio API (no external files needed)
+  const playAlarmSound = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+      oscillator.frequency.setValueAtTime(600, ctx.currentTime + 0.2);
+      
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.5);
+      
+      // Second beep
+      setTimeout(() => {
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(800, ctx.currentTime);
+        gain2.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        osc2.start(ctx.currentTime);
+        osc2.stop(ctx.currentTime + 0.5);
+      }, 250);
+    } catch (e) { console.error('Alarm sound error:', e); }
+  };
+
   const togglePush = async () => {
     if (!pushEnabled) {
       try {
+        if (!('Notification' in window)) {
+          alert('This browser does not support push notifications');
+          return;
+        }
+        
         const permission = await Notification.requestPermission();
+        
         if (permission === 'granted') {
           const reg = await navigator.serviceWorker.register('/sw.js');
           const sub = await reg.pushManager.subscribe({
@@ -417,9 +509,25 @@ function App() {
           
           setPushEnabled(true);
           localStorage.setItem('drainage_push', 'true');
+        } else {
+          setPushEnabled(false);
+          localStorage.removeItem('drainage_push');
+          alert('Push notifications permission was denied. Please enable it in browser settings if you want alerts.');
         }
-      } catch (e) { console.error('Push error:', e); }
+      } catch (e) { 
+        console.error('Push error:', e);
+        setPushEnabled(false);
+        localStorage.removeItem('drainage_push');
+      }
     } else {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await sub.unsubscribe();
+        }
+      } catch (e) { console.error('Unsubscribe error:', e); }
+      
       setPushEnabled(false);
       localStorage.removeItem('drainage_push');
     }
