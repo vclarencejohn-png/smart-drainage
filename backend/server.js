@@ -126,8 +126,8 @@ app.post('/api/data', async (req, res) => {
 
   if (error) console.error('Supabase error:', error);
 
-  // Emit to all connected clients
-  io.emit('sensorData', lastSensorData[unit_id]);
+  // Emit to all connected clients — FIXED: emit 'sensorUpdate' (not 'sensorData')
+  io.emit('sensorUpdate', lastSensorData[unit_id]);
 
   // Alert if overflow or critical
   if (overflow || debris_level >= 80) {
@@ -156,7 +156,7 @@ app.get('/api/data/:unit_id', async (req, res) => {
     .from('readings')
     .select('*')
     .eq('unit_id', unit_id)
-    .order('timestamp', { ascending: false })  // FIXED: 'timestamp' not 'created_at'
+    .order('timestamp', { ascending: false })
     .limit(parseInt(limit));
 
   if (error) return res.status(500).json({ error: error.message });
@@ -176,13 +176,13 @@ app.post('/api/heartbeat', async (req, res) => {
   if (stuck && lastSensorData[unit_id]) {
     lastSensorData[unit_id].stuck = true;
     lastSensorData[unit_id].timestamp = new Date().toISOString();
-    io.emit('sensorData', lastSensorData[unit_id]);
+    io.emit('sensorUpdate', lastSensorData[unit_id]);
   }
 
-  // Emit device status
+  // Emit device status — FIXED: use 'status: live' to match frontend
   io.emit('deviceStatus', {
     unit_id,
-    online: true,
+    status: 'live',
     stuck: stuck || false,
     lastSeen: new Date().toISOString()
   });
@@ -243,7 +243,7 @@ function sendPushNotifications(alertData) {
   });
 }
 
-// ========== MAINTENANCE (in-memory only — no Supabase table) ==========
+// ========== MAINTENANCE (in-memory only) ==========
 const maintenanceMemory = {};
 
 app.post('/api/maintenance/start', (req, res) => {
@@ -254,7 +254,8 @@ app.post('/api/maintenance/start', (req, res) => {
     reason: reason || 'Cleaning',
     startedAt: new Date().toISOString()
   };
-  io.emit('maintenance', { unit_id, active: true, reason, startedBy: started_by });
+  // FIXED: emit 'maintenanceUpdate' to match frontend
+  io.emit('maintenanceUpdate', { unit_id, maintenance: true, startedBy: started_by, reason });
   res.json({ success: true, maintenance: maintenanceMemory[unit_id] });
 });
 
@@ -264,7 +265,8 @@ app.post('/api/maintenance/end', (req, res) => {
     maintenanceMemory[unit_id].active = false;
     maintenanceMemory[unit_id].endedAt = new Date().toISOString();
   }
-  io.emit('maintenance', { unit_id, active: false });
+  // FIXED: emit 'maintenanceUpdate' to match frontend
+  io.emit('maintenanceUpdate', { unit_id, maintenance: false });
   res.json({ success: true });
 });
 
@@ -276,7 +278,7 @@ app.get('/api/maintenance/status', (req, res) => {
   res.json(maintenanceMemory);
 });
 
-// ========== NOTIFICATIONS (in-memory only — no Supabase table) ==========
+// ========== NOTIFICATIONS (in-memory only) ==========
 const notificationMemory = [];
 
 app.get('/api/notifications', (req, res) => {
@@ -287,7 +289,7 @@ app.get('/api/notifications/log', (req, res) => {
   res.json(notificationMemory.slice(-50));
 });
 
-// ========== LOGIN HISTORY (in-memory only — no Supabase table) ==========
+// ========== LOGIN HISTORY (in-memory only) ==========
 const loginHistoryMemory = [];
 
 app.get('/api/login-history', (req, res) => {
@@ -298,9 +300,9 @@ app.get('/api/login-history', (req, res) => {
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Send current data to new client
+  // Send current data to new client — FIXED: emit 'sensorUpdate'
   Object.values(lastSensorData).forEach(data => {
-    socket.emit('sensorData', data);
+    socket.emit('sensorUpdate', data);
   });
 
   socket.on('disconnect', () => {
