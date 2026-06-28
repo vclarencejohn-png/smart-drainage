@@ -56,7 +56,7 @@ app.post('/api/login', async (req, res) => {
     login_time: new Date().toISOString()
   }]);
 
-  res.json({ user: data });
+  res.json({ success: true, user: data });
 });
 
 app.get('/api/users', async (req, res) => {
