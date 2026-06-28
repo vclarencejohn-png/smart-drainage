@@ -50,12 +50,6 @@ app.post('/api/login', async (req, res) => {
 
   if (error || !data) return res.status(401).json({ error: 'Invalid credentials' });
 
-  await supabase.from('login_history').insert([{ 
-    user_id: data.id, 
-    username: data.username,
-    login_time: new Date().toISOString()
-  }]);
-
   res.json({ success: true, user: data });
 });
 
@@ -68,7 +62,7 @@ app.get('/api/users', async (req, res) => {
 app.post('/api/users', async (req, res) => {
   const { data, error } = await supabase.from('users').insert([req.body]);
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  res.json({ success: true, data });
 });
 
 app.delete('/api/users/:id', async (req, res) => {
@@ -87,7 +81,7 @@ app.get('/api/units', async (req, res) => {
 app.post('/api/units', async (req, res) => {
   const { data, error } = await supabase.from('drainage_units').insert([req.body]);
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  res.json({ success: true, data });
 });
 
 app.delete('/api/units/:id', async (req, res) => {
@@ -119,7 +113,7 @@ app.post('/api/data', async (req, res) => {
     lastSeen: new Date().toISOString()
   };
 
-  // Save to Supabase
+  // Save to Supabase — use 'timestamp' not 'created_at'
   const { data, error } = await supabase.from('readings').insert([{
     unit_id,
     debris_level,
@@ -127,7 +121,7 @@ app.post('/api/data', async (req, res) => {
     overflow: overflow || false,
     led_status,
     battery: battery || 100,
-    created_at: new Date().toISOString()
+    timestamp: new Date().toISOString()
   }]);
 
   if (error) console.error('Supabase error:', error);
@@ -147,9 +141,6 @@ app.post('/api/data', async (req, res) => {
 
     io.emit('alert', alertData);
 
-    // Save notification
-    await supabase.from('notifications').insert([alertData]);
-
     // Send push notifications
     sendPushNotifications(alertData);
   }
@@ -165,14 +156,14 @@ app.get('/api/data/:unit_id', async (req, res) => {
     .from('readings')
     .select('*')
     .eq('unit_id', unit_id)
-    .order('created_at', { ascending: false })
+    .order('timestamp', { ascending: false })  // FIXED: 'timestamp' not 'created_at'
     .limit(parseInt(limit));
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 
-// ========== HEARTBEAT (NEW) ==========
+// ========== HEARTBEAT ==========
 app.post('/api/heartbeat', async (req, res) => {
   const { unit_id, online, stuck } = req.body;
 
@@ -214,18 +205,6 @@ app.get('/api/status/:unit_id', (req, res) => {
   });
 });
 
-// ========== NOTIFICATIONS ==========
-app.get('/api/notifications', async (req, res) => {
-  const { data, error } = await supabase
-    .from('notifications')
-    .select('*')
-    .order('timestamp', { ascending: false })
-    .limit(50);
-
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
-
 // ========== PUSH NOTIFICATIONS ==========
 app.post('/api/subscribe', (req, res) => {
   const subscription = req.body;
@@ -264,44 +243,55 @@ function sendPushNotifications(alertData) {
   });
 }
 
-// ========== MAINTENANCE ==========
-app.post('/api/maintenance/start', async (req, res) => {
+// ========== MAINTENANCE (in-memory only — no Supabase table) ==========
+const maintenanceMemory = {};
+
+app.post('/api/maintenance/start', (req, res) => {
   const { unit_id, reason, started_by } = req.body;
-  const { data, error } = await supabase.from('maintenance').insert([{
-    unit_id,
-    reason,
-    started_by,
-    started_at: new Date().toISOString(),
-    active: true
-  }]);
-
-  if (error) return res.status(500).json({ error: error.message });
-  io.emit('maintenance', { unit_id, active: true, reason });
-  res.json(data);
+  maintenanceMemory[unit_id] = {
+    active: true,
+    startedBy: started_by,
+    reason: reason || 'Cleaning',
+    startedAt: new Date().toISOString()
+  };
+  io.emit('maintenance', { unit_id, active: true, reason, startedBy: started_by });
+  res.json({ success: true, maintenance: maintenanceMemory[unit_id] });
 });
 
-app.post('/api/maintenance/end', async (req, res) => {
-  const { unit_id, ended_by } = req.body;
-  const { data, error } = await supabase
-    .from('maintenance')
-    .update({ ended_at: new Date().toISOString(), active: false, ended_by })
-    .eq('unit_id', unit_id)
-    .eq('active', true);
-
-  if (error) return res.status(500).json({ error: error.message });
+app.post('/api/maintenance/end', (req, res) => {
+  const { unit_id } = req.body;
+  if (maintenanceMemory[unit_id]) {
+    maintenanceMemory[unit_id].active = false;
+    maintenanceMemory[unit_id].endedAt = new Date().toISOString();
+  }
   io.emit('maintenance', { unit_id, active: false });
-  res.json(data);
+  res.json({ success: true });
 });
 
-app.get('/api/maintenance', async (req, res) => {
-  const { data, error } = await supabase
-    .from('maintenance')
-    .select('*')
-    .order('started_at', { ascending: false })
-    .limit(20);
+app.get('/api/maintenance', (req, res) => {
+  res.json(maintenanceMemory);
+});
 
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+app.get('/api/maintenance/status', (req, res) => {
+  res.json(maintenanceMemory);
+});
+
+// ========== NOTIFICATIONS (in-memory only — no Supabase table) ==========
+const notificationMemory = [];
+
+app.get('/api/notifications', (req, res) => {
+  res.json(notificationMemory.slice(-50));
+});
+
+app.get('/api/notifications/log', (req, res) => {
+  res.json(notificationMemory.slice(-50));
+});
+
+// ========== LOGIN HISTORY (in-memory only — no Supabase table) ==========
+const loginHistoryMemory = [];
+
+app.get('/api/login-history', (req, res) => {
+  res.json(loginHistoryMemory.slice(-50));
 });
 
 // ========== SOCKET.IO ==========
