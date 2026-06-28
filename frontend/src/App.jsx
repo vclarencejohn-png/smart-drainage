@@ -39,6 +39,10 @@ const translations = {
     done: 'Done', refresh: 'Refresh', dateRange: 'Date Range', from: 'From', to: 'To', filter: 'Filter',
     all: 'All', type: 'Type', message: 'Message', time: 'Time', sent: 'Sent', ip: 'IP Address', role: 'Role',
     lastLogin: 'Last Login', normal: 'Normal', warning: 'Warning', critical: 'Critical', emergency: 'Emergency',
+    viewDemo: '👁️ View Demo', demoMode: 'Demo Mode', about: 'About', createdBy: 'Created by',
+    powerSource: 'Power Source', solarPowered: '☀️ Solar Powered', batteryInfo: 'Battery Info',
+    batterySpecs: '12V 7Ah Deep Cycle', estRuntime: 'Est. Runtime', runtimeValue: '~7 days/night',
+    autoCharge: 'Auto-charges during daytime',
   },
   tl: {
     login: 'Mag-login', username: 'Username', password: 'Password', rememberMe: 'Tandaan Ako',
@@ -57,7 +61,52 @@ const translations = {
     done: 'Tapos', refresh: 'I-refresh', dateRange: 'Saklaw ng Petsa', from: 'Mula', to: 'Hanggang', filter: 'I-filter',
     all: 'Lahat', type: 'Uri', message: 'Mensahe', time: 'Oras', sent: 'Naipadala', ip: 'IP Address', role: 'Role',
     lastLogin: 'Huling Login', normal: 'Normal', warning: 'Babala', critical: 'Kritikal', emergency: 'Emergency',
+    viewDemo: '👁️ Tingnan ang Demo', demoMode: 'Demo Mode', about: 'Tungkol sa', createdBy: 'Ginawa ni',
+    powerSource: 'Pinagmulan ng Kuryente', solarPowered: '☀️ Solar Powered', batteryInfo: 'Impormasyon ng Baterya',
+    batterySpecs: '12V 7Ah Deep Cycle', estRuntime: 'Tinatayang Tagal', runtimeValue: '~7 araw/gabi',
+    autoCharge: 'Awtomatikong nagcha-charge sa araw',
   }
+};
+
+// Demo data generator
+const generateDemoData = (unitId) => {
+  const now = new Date();
+  const baseLevel = 35 + Math.sin(now.getTime() / 60000) * 30 + Math.random() * 10;
+  const level = Math.max(0, Math.min(100, baseLevel));
+  const distance = 33.92 - (level / 100) * (33.92 - 21.00);
+  return {
+    unit_id: unitId,
+    debris_level: level,
+    distance: distance,
+    overflow: level > 95,
+    led_status: level >= 75 ? 'RED' : level >= 40 ? 'YELLOW' : 'GREEN',
+    battery: null,
+    alarm: level >= 80,
+    stuck: false,
+    timestamp: now.toISOString(),
+    maintenance: false,
+  };
+};
+
+const generateDemoHistory = (unitId, count = 50) => {
+  const history = [];
+  const now = Date.now();
+  for (let i = count - 1; i >= 0; i--) {
+    const t = now - i * 60000;
+    const baseLevel = 35 + Math.sin(t / 300000) * 30 + (Math.random() - 0.5) * 15;
+    const level = Math.max(0, Math.min(100, baseLevel));
+    history.push({
+      unit_id: unitId,
+      debris_level: level,
+      distance: 33.92 - (level / 100) * (33.92 - 21.00),
+      overflow: level > 95,
+      led_status: level >= 75 ? 'RED' : level >= 40 ? 'YELLOW' : 'GREEN',
+      battery: null,
+      timestamp: new Date(t).toISOString(),
+      maintenance: false,
+    });
+  }
+  return history;
 };
 
 function App() {
@@ -87,11 +136,15 @@ function App() {
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user', unit_id: '' });
   const [newUnit, setNewUnit] = useState({ unit_id: '', name: '', location: '' });
   const [adminError, setAdminError] = useState(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   const t = translations[lang];
   const inactivityTimer = useRef(null);
   const countdownTimer = useRef(null);
   const socketRef = useRef(null);
+  const demoInterval = useRef(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('drainage_user');
@@ -133,8 +186,87 @@ function App() {
     localStorage.setItem('drainage_lang', lang);
   }, [lang]);
 
+  // Demo mode effect
+  useEffect(() => {
+    if (!isDemoMode) {
+      if (demoInterval.current) {
+        clearInterval(demoInterval.current);
+        demoInterval.current = null;
+      }
+      return;
+    }
+
+    // Initialize demo data
+    const demoUnits = [
+      { unit_id: 'drainage_1', name: 'Drainage 1', location: 'Main Street' },
+      { unit_id: 'drainage_2', name: 'Drainage 2', location: 'Second Street' },
+    ];
+    setUnits(demoUnits);
+    setSelectedUnit('drainage_1');
+
+    const initialData = generateDemoData('drainage_1');
+    setSensorData(initialData);
+    setDeviceStatus({ drainage_1: { status: 'live', lastSeen: new Date().toISOString() } });
+
+    const demoHistory = generateDemoHistory('drainage_1', 50);
+    setHistoryData(demoHistory);
+
+    const labels = demoHistory.slice().reverse().map(d => new Date(d.timestamp).toLocaleTimeString());
+    const levels = demoHistory.slice().reverse().map(d => d.debris_level);
+    setChartData({
+      labels,
+      datasets: [{
+        label: t.debrisLevel,
+        data: levels,
+        borderColor: darkMode ? '#4fc3f7' : '#1976d2',
+        backgroundColor: darkMode ? 'rgba(79,195,247,0.1)' : 'rgba(25,118,210,0.1)',
+        tension: 0.4,
+        fill: true,
+      }]
+    });
+
+    // Update demo data every 5 seconds
+    demoInterval.current = setInterval(() => {
+      const newData = generateDemoData('drainage_1');
+      setSensorData(newData);
+      setDeviceStatus({ drainage_1: { status: 'live', lastSeen: new Date().toISOString() } });
+
+      setHistoryData(prev => {
+        const updated = [...prev.slice(1), newData];
+        const labels = updated.slice().reverse().map(d => new Date(d.timestamp).toLocaleTimeString());
+        const levels = updated.slice().reverse().map(d => d.debris_level);
+        setChartData({
+          labels,
+          datasets: [{
+            label: t.debrisLevel,
+            data: levels,
+            borderColor: darkMode ? '#4fc3f7' : '#1976d2',
+            backgroundColor: darkMode ? 'rgba(79,195,247,0.1)' : 'rgba(25,118,210,0.1)',
+            tension: 0.4,
+            fill: true,
+          }]
+        });
+        return updated;
+      });
+
+      // Demo alerts
+      if (newData.overflow) {
+        addAlert(t.alertOverflow, 'overflow');
+      } else if (newData.debris_level >= 80) {
+        addAlert(t.alertCritical, 'critical');
+      }
+    }, 5000);
+
+    return () => {
+      if (demoInterval.current) {
+        clearInterval(demoInterval.current);
+        demoInterval.current = null;
+      }
+    };
+  }, [isDemoMode, darkMode, lang]);
+
   const resetInactivityTimer = useCallback(() => {
-    if (!user) return;
+    if (!user || isDemoMode) return;
     clearTimeout(inactivityTimer.current);
     clearInterval(countdownTimer.current);
     setTimeLeft(INACTIVITY_TIMEOUT);
@@ -160,10 +292,10 @@ function App() {
     }, 1000);
 
     localStorage.setItem('drainage_loginTime', Date.now().toString());
-  }, [user]);
+  }, [user, isDemoMode]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isDemoMode) return;
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
     const handleActivity = () => resetInactivityTimer();
     events.forEach(e => document.addEventListener(e, handleActivity));
@@ -173,7 +305,7 @@ function App() {
       clearTimeout(inactivityTimer.current);
       clearInterval(countdownTimer.current);
     };
-  }, [user, resetInactivityTimer]);
+  }, [user, resetInactivityTimer, isDemoMode]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -209,12 +341,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isDemoMode) return;
     autoSubscribePush();
-  }, [user, autoSubscribePush]);
+  }, [user, autoSubscribePush, isDemoMode]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isDemoMode) return;
     const s = io(SOCKET_URL);
     socketRef.current = s;
 
@@ -250,23 +382,23 @@ function App() {
     });
 
     return () => s.disconnect();
-  }, [user, selectedUnit]);
+  }, [user, selectedUnit, isDemoMode]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isDemoMode) return;
     fetchUnits();
     fetchUsers();
     fetchSensorData();
     fetchMaintenanceStatus();
     fetchNotificationLog();
     if (user.role === 'admin') fetchLoginHistory();
-  }, [user]);
+  }, [user, isDemoMode]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isDemoMode) return;
     fetchSensorData();
     fetchHistory();
-  }, [selectedUnit]);
+  }, [selectedUnit, isDemoMode]);
 
   const fetchUnits = async () => {
     try {
@@ -301,6 +433,7 @@ function App() {
   };
 
   const fetchSensorData = async () => {
+    if (isDemoMode) return;
     try {
       const res = await fetch(`${API_URL}/api/data/${selectedUnit}?limit=1`);
       const data = await res.json();
@@ -311,6 +444,7 @@ function App() {
   };
 
   const fetchHistory = async () => {
+    if (isDemoMode) return;
     try {
       let url = `${API_URL}/api/data/${selectedUnit}/history?limit=50`;
       if (historyFilter.startDate) url += `&startDate=${historyFilter.startDate}`;
@@ -345,6 +479,7 @@ function App() {
   };
 
   const fetchMaintenanceStatus = async () => {
+    if (isDemoMode) return;
     try {
       const res = await fetch(`${API_URL}/api/maintenance/status`);
       const data = await res.json();
@@ -360,6 +495,7 @@ function App() {
   };
 
   const fetchNotificationLog = async () => {
+    if (isDemoMode) return;
     try {
       const res = await fetch(`${API_URL}/api/notifications/log`);
       const data = await res.json();
@@ -375,6 +511,7 @@ function App() {
   };
 
   const fetchLoginHistory = async () => {
+    if (isDemoMode) return;
     try {
       const res = await fetch(`${API_URL}/api/login-history`);
       const data = await res.json();
@@ -418,10 +555,21 @@ function App() {
     setUser(null);
     setSensorData(null);
     setHistoryData([]);
+    setIsDemoMode(false);
+    if (demoInterval.current) {
+      clearInterval(demoInterval.current);
+      demoInterval.current = null;
+    }
     localStorage.removeItem('drainage_user');
     localStorage.removeItem('drainage_loginTime');
     localStorage.removeItem('drainage_remember');
     if (socketRef.current) socketRef.current.disconnect();
+  };
+
+  const startDemoMode = () => {
+    setIsDemoMode(true);
+    setUser({ username: 'demo', role: 'user' });
+    setActiveTab('dashboard');
   };
 
   const addAlert = (message, type) => {
@@ -485,6 +633,15 @@ function App() {
   };
 
   const startMaintenance = async () => {
+    if (isDemoMode) {
+      setMaintenanceStatus(prev => ({
+        ...prev,
+        [selectedUnit]: { active: true, startedBy: 'demo', reason: maintenanceReason || 'Cleaning', startedAt: new Date().toISOString() }
+      }));
+      setMaintenanceModal(false);
+      setMaintenanceReason('');
+      return;
+    }
     try {
       await fetch(`${API_URL}/api/maintenance/start`, {
         method: 'POST',
@@ -502,6 +659,10 @@ function App() {
   };
 
   const endMaintenance = async () => {
+    if (isDemoMode) {
+      setMaintenanceStatus(prev => ({ ...prev, [selectedUnit]: { active: false } }));
+      return;
+    }
     try {
       await fetch(`${API_URL}/api/maintenance/end`, {
         method: 'POST',
@@ -513,6 +674,10 @@ function App() {
   };
 
   const createUser = async () => {
+    if (isDemoMode) {
+      alert('Demo mode — cannot add users');
+      return;
+    }
     try {
       const res = await fetch(`${API_URL}/api/users`, {
         method: 'POST',
@@ -531,6 +696,10 @@ function App() {
   };
 
   const createUnit = async () => {
+    if (isDemoMode) {
+      alert('Demo mode — cannot add units');
+      return;
+    }
     try {
       const res = await fetch(`${API_URL}/api/units`, {
         method: 'POST',
@@ -549,6 +718,10 @@ function App() {
   };
 
   const deleteUser = async (username) => {
+    if (isDemoMode) {
+      alert('Demo mode — cannot delete users');
+      return;
+    }
     if (!username) return;
     if (username === user?.username) {
       alert('You cannot delete your own account!');
@@ -574,6 +747,10 @@ function App() {
   };
 
   const deleteUnit = async (unitId) => {
+    if (isDemoMode) {
+      alert('Demo mode — cannot delete units');
+      return;
+    }
     if (!unitId) return;
     if (!window.confirm(`Are you sure you want to delete unit "${unitId}"?`)) return;
 
@@ -596,10 +773,10 @@ function App() {
 
   const downloadCSV = () => {
     if (!Array.isArray(historyData) || historyData.length === 0) return;
-    const headers = ['Timestamp', 'Debris Level (%)', 'Distance (cm)', 'Overflow', 'LED', 'Battery (%)', 'Maintenance'];
+    const headers = ['Timestamp', 'Debris Level (%)', 'Distance (cm)', 'Overflow', 'LED', 'Maintenance'];
     const rows = historyData.map(d => [
       d.timestamp, d.debris_level, d.distance, d.overflow ? 'Yes' : 'No',
-      d.led_status, d.battery, d.maintenance ? 'Yes' : 'No'
+      d.led_status, d.maintenance ? 'Yes' : 'No'
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -663,6 +840,7 @@ function App() {
   const safeArray = (arr) => Array.isArray(arr) ? arr : [];
   const safeObject = (obj) => (obj && typeof obj === 'object') ? obj : {};
 
+  // Login screen
   if (!user) {
     return (
       <div className={`login-container ${darkMode ? 'dark' : ''}`}>
@@ -679,17 +857,65 @@ function App() {
             </label>
             <button type="submit">{t.login}</button>
           </form>
+          <div className="login-divider">
+            <span>or</span>
+          </div>
+          <button className="demo-btn" onClick={startDemoMode}>{t.viewDemo}</button>
           <div className="login-settings">
             <button onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️' : '🌙'}</button>
             <button onClick={() => setLang(lang === 'en' ? 'tl' : 'en')}>{lang === 'en' ? '🇵🇭 TL' : '🇺🇸 EN'}</button>
           </div>
+          <div className="login-footer">
+            <button className="about-link" onClick={() => setShowAboutModal(true)}>ℹ️ {t.about}</button>
+          </div>
         </div>
+
+        {showAboutModal && (
+          <div className="modal-overlay" onClick={() => setShowAboutModal(false)}>
+            <div className="modal about-modal" onClick={e => e.stopPropagation()}>
+              <h3>🌊 Smart Drainage Monitoring System</h3>
+              <div className="about-content">
+                <p><strong>{t.createdBy}:</strong> Clarence John Villanueva</p>
+                <p><strong>Tech Stack:</strong></p>
+                <ul>
+                  <li>ESP32 + JSN-SR04T Ultrasonic Sensor</li>
+                  <li>React + Vercel Frontend</li>
+                  <li>Node.js + Railway Backend</li>
+                  <li>Supabase PostgreSQL Database</li>
+                  <li>Socket.io Real-time Updates</li>
+                  <li>Push Notifications (Web Push API)</li>
+                </ul>
+                <p><strong>Features:</strong></p>
+                <ul>
+                  <li>Real-time debris level monitoring</li>
+                  <li>Overflow detection with float switch</li>
+                  <li>Stuck mode (stops logging when full for 10 min)</li>
+                  <li>Maintenance mode with start/end tracking</li>
+                  <li>Voice alerts & alarm sounds</li>
+                  <li>Dark mode & multi-language (EN/TL)</li>
+                  <li>CSV/PDF export</li>
+                  <li>Solar-powered with 12V 7Ah battery</li>
+                </ul>
+              </div>
+              <div className="modal-buttons">
+                <button onClick={() => setShowAboutModal(false)} className="confirm-btn">{t.done}</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className={`app ${darkMode ? 'dark' : ''}`}>
+      {isDemoMode && (
+        <div className="demo-banner">
+          🎮 {t.demoMode} — {t.createdBy}: <strong>Clarence John Villanueva</strong>
+          <button onClick={handleLogout} className="demo-exit">✕ Exit Demo</button>
+        </div>
+      )}
+
       <div className="alerts-container">
         {alerts.map(alert => (
           <div key={alert.id} className={`alert alert-${alert.type}`}>
@@ -700,9 +926,9 @@ function App() {
       </div>
 
       <header className="app-header">
-        <h1>🌊 Smart Drainage</h1>
+        <h1>🌊 Smart Drainage {isDemoMode && <span className="demo-badge">{t.demoMode}</span>}</h1>
         <div className="header-controls">
-          <span className="timer">⏱️ {t.willAutoLogout}: {formatTimeLeft(timeLeft)}</span>
+          {!isDemoMode && <span className="timer">⏱️ {t.willAutoLogout}: {formatTimeLeft(timeLeft)}</span>}
           <select value={selectedUnit} onChange={e => setSelectedUnit(e.target.value)} className="unit-select">
             {safeArray(units).map(u => <option key={u?.unit_id} value={u?.unit_id}>{u?.name || u?.unit_id}</option>)}
           </select>
@@ -755,11 +981,22 @@ function App() {
                 boxShadow: `0 0 20px ${sensorData?.led_status === 'RED' ? '#f4433680' : sensorData?.led_status === 'YELLOW' ? '#ff980080' : '#4caf5080'}`
               }}>{sensorData?.led_status || '--'}</div>
             </div>
-            <div className="status-card">
-              <h3>{t.battery}</h3>
-              <div className="big-number">{sensorData?.battery != null ? `${sensorData.battery}%` : '--'}</div>
-              <div className="battery-bar">
-                <div style={{ width: `${sensorData?.battery || 0}%`, backgroundColor: (sensorData?.battery || 0) > 50 ? '#4caf50' : (sensorData?.battery || 0) > 20 ? '#ff9800' : '#f44336' }}></div>
+            <div className="status-card power-card">
+              <h3>🔋 {t.powerSource}</h3>
+              <div className="power-info">
+                <div className="power-row">
+                  <span className="power-icon">☀️</span>
+                  <span>{t.solarPowered}</span>
+                </div>
+                <div className="power-row">
+                  <span className="power-icon">🔋</span>
+                  <span>{t.batterySpecs}</span>
+                </div>
+                <div className="power-row">
+                  <span className="power-icon">⏱️</span>
+                  <span>{t.estRuntime}: {t.runtimeValue}</span>
+                </div>
+                <div className="power-note">{t.autoCharge}</div>
               </div>
             </div>
             <div className="status-card">
@@ -797,14 +1034,14 @@ function App() {
           <div className="history-filters">
             <label>{t.from}: <input type="date" value={historyFilter.startDate} onChange={e => setHistoryFilter({...historyFilter, startDate: e.target.value})} /></label>
             <label>{t.to}: <input type="date" value={historyFilter.endDate} onChange={e => setHistoryFilter({...historyFilter, endDate: e.target.value})} /></label>
-            <button onClick={fetchHistory}>{t.filter}</button>
+            {!isDemoMode && <button onClick={fetchHistory}>{t.filter}</button>}
             <button onClick={downloadCSV}>📄 {t.downloadCSV}</button>
             <button onClick={downloadPDF}>🖨️ {t.downloadPDF}</button>
           </div>
           <div className="history-table-container">
             <table className="history-table">
               <thead>
-                <tr><th>{t.time}</th><th>{t.debrisLevel}</th><th>Distance</th><th>{t.overflow}</th><th>LED</th><th>{t.battery}</th><th>{t.maintenance}</th></tr>
+                <tr><th>{t.time}</th><th>{t.debrisLevel}</th><th>Distance</th><th>{t.overflow}</th><th>LED</th><th>{t.maintenance}</th></tr>
               </thead>
               <tbody>
                 {safeArray(historyData).map((d, i) => (
@@ -814,7 +1051,6 @@ function App() {
                     <td>{d?.distance != null ? `${d.distance.toFixed(2)}cm` : '-'}</td>
                     <td>{d?.overflow ? '⚠️ YES' : '✓ No'}</td>
                     <td><span className={`led-mini ${d?.led_status?.toLowerCase()}`}>{d?.led_status}</span></td>
-                    <td>{d?.battery != null ? `${d.battery}%` : '-'}</td>
                     <td>{d?.maintenance ? '🔧' : ''}</td>
                   </tr>
                 ))}
@@ -827,7 +1063,7 @@ function App() {
       {activeTab === 'notifications' && (
         <div className="notifications-tab">
           <h2>{t.notifications}</h2>
-          <button onClick={fetchNotificationLog} className="refresh-btn">🔄 {t.refresh}</button>
+          {!isDemoMode && <button onClick={fetchNotificationLog} className="refresh-btn">🔄 {t.refresh}</button>}
           <div className="notification-list">
             {safeArray(notificationLog).length === 0 ? <p className="no-data">{t.noData}</p> : (
               safeArray(notificationLog).slice().reverse().map((n, i) => (
@@ -915,7 +1151,7 @@ function App() {
 
           <div className="admin-section">
             <h3>📋 {t.loginHistory}</h3>
-            <button onClick={fetchLoginHistory} className="refresh-btn">🔄 {t.refresh}</button>
+            {!isDemoMode && <button onClick={fetchLoginHistory} className="refresh-btn">🔄 {t.refresh}</button>}
             <table className="admin-table">
               <thead><tr><th>{t.username}</th><th>{t.role}</th><th>IP</th><th>{t.time}</th></tr></thead>
               <tbody>
@@ -954,6 +1190,13 @@ function App() {
       {activeTab === 'settings' && (
         <div className="settings-panel">
           <h2>⚙️ {t.settings}</h2>
+          {isDemoMode && (
+            <div className="demo-info-card">
+              <h3>🎮 {t.demoMode}</h3>
+              <p><strong>{t.createdBy}:</strong> Clarence John Villanueva</p>
+              <p>This is a simulated environment for demonstration purposes.</p>
+            </div>
+          )}
           <div className="setting-item">
             <label>{t.darkMode}</label>
             <button onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️ ' + t.lightMode : '🌙 ' + t.darkMode}</button>
@@ -1016,7 +1259,7 @@ function App() {
       )}
 
       <footer className="app-footer">
-        <p>Smart Drainage System | {user?.username} ({user?.role}) | {new Date().toLocaleDateString()}</p>
+        <p>Smart Drainage System {isDemoMode && `| ${t.demoMode}`} | {isDemoMode ? `${t.createdBy}: Clarence John Villanueva` : `${user?.username} (${user?.role})`} | {new Date().toLocaleDateString()}</p>
       </footer>
     </div>
   );
