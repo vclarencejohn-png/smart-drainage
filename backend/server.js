@@ -38,6 +38,33 @@ let pushSubscriptions = [];
 let lastSensorData = {};
 let deviceOnline = {};
 
+// ========== NEW: OFFLINE DETECTION ==========
+// Mark device offline if no heartbeat for 2 minutes
+const OFFLINE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+
+function checkDeviceOffline() {
+  const now = new Date().toISOString();
+  Object.keys(deviceOnline).forEach(unit_id => {
+    const lastSeen = deviceOnline[unit_id]?.lastSeen;
+    if (lastSeen) {
+      const elapsed = new Date(now) - new Date(lastSeen);
+      if (elapsed >= OFFLINE_TIMEOUT_MS && deviceOnline[unit_id].online) {
+        deviceOnline[unit_id].online = false;
+        console.log(`[OFFLINE DETECTED] ${unit_id} — no heartbeat for ${Math.round(elapsed/1000)}s`);
+        io.emit('deviceStatus', {
+          unit_id,
+          status: 'offline',
+          stuck: lastSensorData[unit_id]?.stuck || false,
+          lastSeen: lastSeen
+        });
+      }
+    }
+  });
+}
+
+// Run offline check every 30 seconds
+setInterval(checkDeviceOffline, 30000);
+
 // ========== AUTH ==========
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
@@ -94,7 +121,7 @@ app.delete('/api/units/:id', async (req, res) => {
 app.post('/api/data', async (req, res) => {
   const { unit_id, debris_level, distance, overflow, led_status, battery, alarm, stuck } = req.body;
 
-  // Store last data
+  // Store last data — include new timer fields if present
   lastSensorData[unit_id] = {
     unit_id,
     debris_level,
@@ -104,6 +131,10 @@ app.post('/api/data', async (req, res) => {
     battery: battery || 100,
     alarm: alarm || false,
     stuck: stuck || false,
+    // ===== NEW: Store timer fields =====
+    stuck_active: req.body.stuck_active || stuck || false,
+    stuck_timer: req.body.stuck_timer || 0,
+    resume_timer: req.body.resume_timer || 0,
     timestamp: new Date().toISOString()
   };
 
@@ -177,6 +208,13 @@ app.post('/api/heartbeat', async (req, res) => {
     lastSensorData[unit_id].stuck = true;
     lastSensorData[unit_id].timestamp = new Date().toISOString();
     io.emit('sensorUpdate', lastSensorData[unit_id]);
+  }
+
+  // ===== NEW: Update timer fields from heartbeat if present =====
+  if (req.body.stuck_active !== undefined && lastSensorData[unit_id]) {
+    lastSensorData[unit_id].stuck_active = req.body.stuck_active;
+    lastSensorData[unit_id].stuck_timer = req.body.stuck_timer || 0;
+    lastSensorData[unit_id].resume_timer = req.body.resume_timer || 0;
   }
 
   // Emit device status — FIXED: use 'status: live' to match frontend
