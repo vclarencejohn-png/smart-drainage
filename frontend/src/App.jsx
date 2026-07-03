@@ -43,6 +43,9 @@ const translations = {
     powerSource: 'Power Source', solarPowered: '☀️ Solar Powered', batteryInfo: 'Battery Info',
     batterySpecs: '12V 7Ah Deep Cycle', estRuntime: 'Est. Runtime', runtimeValue: '~7 days/night',
     autoCharge: 'Auto-charges during daytime',
+    // ===== NEW: Stuck mode timer translations =====
+    stuckModeIn: 'Stuck mode in', stuckModeActive: 'Stuck mode active', resumingIn: 'Resuming in',
+    stuckMode: 'Stuck Mode', resumeTimer: 'Resume Timer', noTimer: '—',
   },
   tl: {
     login: 'Mag-login', username: 'Username', password: 'Password', rememberMe: 'Tandaan Ako',
@@ -65,6 +68,9 @@ const translations = {
     powerSource: 'Pinagmulan ng Kuryente', solarPowered: '☀️ Solar Powered', batteryInfo: 'Impormasyon ng Baterya',
     batterySpecs: '12V 7Ah Deep Cycle', estRuntime: 'Tinatayang Tagal', runtimeValue: '~7 araw/gabi',
     autoCharge: 'Awtomatikong nagcha-charge sa araw',
+    // ===== NEW: Stuck mode timer translations =====
+    stuckModeIn: 'Stuck mode sa', stuckModeActive: 'Stuck mode active', resumingIn: 'Magre-resume sa',
+    stuckMode: 'Stuck Mode', resumeTimer: 'Resume Timer', noTimer: '—',
   }
 };
 
@@ -83,6 +89,10 @@ const generateDemoData = (unitId) => {
     battery: null,
     alarm: level >= 80,
     stuck: false,
+    // ===== NEW: Demo timer fields =====
+    stuck_active: false,
+    stuck_timer: 0,
+    resume_timer: 0,
     timestamp: now.toISOString(),
     maintenance: false,
   };
@@ -102,6 +112,9 @@ const generateDemoHistory = (unitId, count = 50) => {
       overflow: level > 95,
       led_status: level >= 75 ? 'RED' : level >= 40 ? 'YELLOW' : 'GREEN',
       battery: null,
+      stuck_active: false,
+      stuck_timer: 0,
+      resume_timer: 0,
       timestamp: new Date(t).toISOString(),
       maintenance: false,
     });
@@ -145,6 +158,8 @@ function App() {
   const countdownTimer = useRef(null);
   const socketRef = useRef(null);
   const demoInterval = useRef(null);
+  // ===== NEW: Timer countdown interval for frontend display =====
+  const stuckTimerInterval = useRef(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('drainage_user');
@@ -400,6 +415,42 @@ function App() {
     fetchHistory();
   }, [selectedUnit, isDemoMode]);
 
+  // ===== NEW: Frontend countdown timer for stuck/resume timers =====
+  // This decrements the displayed timer every second for smooth countdown
+  useEffect(() => {
+    if (!sensorData || isDemoMode) return;
+
+    // Clear any existing interval
+    if (stuckTimerInterval.current) {
+      clearInterval(stuckTimerInterval.current);
+      stuckTimerInterval.current = null;
+    }
+
+    // Only start countdown if there's an active timer
+    if ((sensorData.stuck_timer > 0 && !sensorData.stuck_active) || 
+        (sensorData.resume_timer > 0 && sensorData.stuck_active)) {
+      stuckTimerInterval.current = setInterval(() => {
+        setSensorData(prev => {
+          if (!prev) return prev;
+          if (prev.stuck_active && prev.resume_timer > 0) {
+            return { ...prev, resume_timer: Math.max(0, prev.resume_timer - 1) };
+          }
+          if (!prev.stuck_active && prev.stuck_timer > 0) {
+            return { ...prev, stuck_timer: Math.max(0, prev.stuck_timer - 1) };
+          }
+          return prev;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (stuckTimerInterval.current) {
+        clearInterval(stuckTimerInterval.current);
+        stuckTimerInterval.current = null;
+      }
+    };
+  }, [sensorData?.stuck_timer, sensorData?.resume_timer, sensorData?.stuck_active, isDemoMode]);
+
   const fetchUnits = async () => {
     try {
       const res = await fetch(`${API_URL}/api/units`);
@@ -559,6 +610,10 @@ function App() {
     if (demoInterval.current) {
       clearInterval(demoInterval.current);
       demoInterval.current = null;
+    }
+    if (stuckTimerInterval.current) {
+      clearInterval(stuckTimerInterval.current);
+      stuckTimerInterval.current = null;
     }
     localStorage.removeItem('drainage_user');
     localStorage.removeItem('drainage_loginTime');
@@ -837,8 +892,81 @@ function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // ===== NEW: Format seconds to MM:SS =====
+  const formatSeconds = (seconds) => {
+    if (!seconds || seconds <= 0) return t.noTimer;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const safeArray = (arr) => Array.isArray(arr) ? arr : [];
   const safeObject = (obj) => (obj && typeof obj === 'object') ? obj : {};
+
+  // ===== NEW: Render stuck mode timer card =====
+  const renderStuckTimerCard = () => {
+    if (!sensorData) return null;
+
+    const { stuck_active, stuck_timer, resume_timer } = sensorData;
+    const isOffline = deviceStatus[selectedUnit]?.status === 'offline';
+
+    // Don't show timer card if device is offline
+    if (isOffline) return null;
+
+    // Show stuck countdown (before entering stuck mode)
+    if (!stuck_active && stuck_timer > 0) {
+      return (
+        <div className="status-card stuck-countdown-card">
+          <h3>⏳ {t.stuckModeIn}</h3>
+          <div className="big-number countdown-number">
+            {formatSeconds(stuck_timer)}
+          </div>
+          <div className="status-text">{t.stuckMode}</div>
+          <div className="timer-bar">
+            <div 
+              className="timer-progress" 
+              style={{ width: `${(stuck_timer / 600) * 100}%` }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // Show stuck mode active
+    if (stuck_active && resume_timer === 0) {
+      return (
+        <div className="status-card stuck-active-card">
+          <h3>🔒 {t.stuckModeActive}</h3>
+          <div className="big-number">—</div>
+          <div className="status-text">{t.stuckMode}</div>
+          <div className="timer-bar stuck">
+            <div className="timer-progress" style={{ width: '100%' }} />
+          </div>
+        </div>
+      );
+    }
+
+    // Show resume countdown
+    if (stuck_active && resume_timer > 0) {
+      return (
+        <div className="status-card resume-countdown-card">
+          <h3>⏳ {t.resumingIn}</h3>
+          <div className="big-number countdown-number">
+            {formatSeconds(resume_timer)}
+          </div>
+          <div className="status-text">{t.resumeTimer}</div>
+          <div className="timer-bar">
+            <div 
+              className="timer-progress resume" 
+              style={{ width: `${(resume_timer / 300) * 100}%` }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   // Login screen
   if (!user) {
@@ -947,6 +1075,14 @@ function App() {
       {activeTab === 'dashboard' && (
         <div className="dashboard">
           {!isOnline && <div className="offline-banner">⚠️ Offline mode - Showing cached data</div>}
+
+          {/* ===== NEW: Device offline banner ===== */}
+          {deviceStatus[selectedUnit]?.status === 'offline' && !isDemoMode && (
+            <div className="offline-banner device-offline">
+              ⚠️ Device is offline — Last seen: {deviceStatus[selectedUnit]?.lastSeen ? new Date(deviceStatus[selectedUnit].lastSeen).toLocaleTimeString() : 'Unknown'}
+            </div>
+          )}
+
           {maintenanceStatus[selectedUnit]?.active && (
             <div className="maintenance-banner">
               🔧 {t.underMaintenance} 
@@ -981,6 +1117,10 @@ function App() {
                 boxShadow: `0 0 20px ${sensorData?.led_status === 'RED' ? '#f4433680' : sensorData?.led_status === 'YELLOW' ? '#ff980080' : '#4caf5080'}`
               }}>{sensorData?.led_status || '--'}</div>
             </div>
+
+            {/* ===== NEW: Stuck Mode Timer Card ===== */}
+            {renderStuckTimerCard()}
+
             <div className="status-card power-card">
               <h3>🔋 {t.powerSource}</h3>
               <div className="power-info">
