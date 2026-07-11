@@ -15,8 +15,8 @@ import './App.css';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const API_URL = 'https://smart-drainage-production.up.railway.app';
-const SOCKET_URL = 'wss://smart-drainage-production.up.railway.app';
+const API_URL = 'https://smart-drainage-hvfv.onrender.com';
+const SOCKET_URL = 'wss://smart-drainage-hvfv.onrender.com';
 const INACTIVITY_TIMEOUT = 60 * 60 * 1000;
 
 const VAPID_PUBLIC_KEY = 'BM9CHUWgQEjHXyL4KSxd_f3G2hVoj99fw_9TojPGjJAd5HXCGBEkXPWD8KgdRbmakpFiGWAe7X5qr3szhOi6uTM';
@@ -333,6 +333,28 @@ function App() {
     };
   }, []);
 
+  // Frontend fallback: mark device offline if no data for 2+ minutes
+  useEffect(() => {
+    if (!user || isDemoMode) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setDeviceStatus(prev => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(unit_id => {
+          const lastSeen = updated[unit_id]?.lastSeen;
+          if (lastSeen && updated[unit_id]?.status === 'live') {
+            const elapsed = now - new Date(lastSeen).getTime();
+            if (elapsed >= 2 * 60 * 1000) {
+              updated[unit_id] = { ...updated[unit_id], status: 'offline' };
+            }
+          }
+        });
+        return updated;
+      });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user, isDemoMode]);
+
   const autoSubscribePush = useCallback(async () => {
     try {
       if (!('Notification' in window)) return;
@@ -383,8 +405,14 @@ function App() {
       }
     });
 
-    s.on('deviceStatus', ({ unit_id, status }) => {
-      setDeviceStatus(prev => ({ ...prev, [unit_id]: { status, lastSeen: new Date().toISOString() } }));
+    s.on('deviceStatus', ({ unit_id, status, lastSeen }) => {
+      setDeviceStatus(prev => ({
+        ...prev,
+        [unit_id]: {
+          status,
+          lastSeen: lastSeen || prev[unit_id]?.lastSeen || new Date().toISOString()
+        }
+      }));
     });
 
     s.on('maintenanceUpdate', ({ unit_id, maintenance, startedBy, reason }) => {
