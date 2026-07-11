@@ -15,7 +15,7 @@ const io = new Server(server, {
 });
 
 app.use(cors({
-  origin: ['https://smart-drainage.vercel.app', 'http://localhost:5173', 'http://localhost:3000'],
+  origin: ['https://smart-drainage.vercel.app', 'http://localhost:5173', 'http://localhost:3000', '*'],
   credentials: true
 }));
 app.use(express.json());
