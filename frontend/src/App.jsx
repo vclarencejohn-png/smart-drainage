@@ -94,10 +94,17 @@ function App() {
     const connection = connectionFor(reading, currentTime);
     return { unit, reading, connection, status: statusFor(reading, connection) };
   }), [units, readings, currentTime]);
-  const alertingCards = useMemo(() => cards.filter(({ unit, reading, connection }) => reading && connection.isLive && !mutedIds.has(unit.id) && (reading.overflow || reading.debris_level >= 75)), [cards, mutedIds]);
+  const alertMessage = useMemo(() => cards
+    .filter(({ unit, reading, connection }) => reading && connection.isLive && !mutedIds.has(unit.id) && (reading.overflow || reading.debris_level >= 75))
+    .map(({ unit, reading }) => {
+      if (reading.overflow) return `Overflow in ${unit.name}`;
+      if (reading.debris_level >= 91) return `${unit.name} is full`;
+      return `${unit.name} is critical`;
+    })
+    .join('. '), [cards, mutedIds]);
 
   useEffect(() => {
-    if (!alertingCards.length) return undefined;
+    if (!alertMessage) return undefined;
     const playAlarm = () => {
       if (alarmRef.current) {
         alarmRef.current.currentTime = 0;
@@ -106,13 +113,8 @@ function App() {
     };
     const speakAlert = () => {
       if ('speechSynthesis' in window) {
-        const message = alertingCards.map(({ unit, reading }) => {
-          if (reading.overflow) return `Overflow in ${unit.name}`;
-          if (reading.debris_level >= 91) return `${unit.name} is full`;
-          return `${unit.name} is critical`;
-        }).join('. ');
         window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(message));
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(alertMessage));
       }
     };
     playAlarm();
@@ -123,7 +125,7 @@ function App() {
       window.clearInterval(soundInterval);
       window.clearInterval(voiceInterval);
     };
-  }, [alertingCards]);
+  }, [alertMessage]);
 
   async function handleLogin(event) {
     event.preventDefault();
