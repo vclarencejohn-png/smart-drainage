@@ -8,11 +8,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
-    "socket.io": "^4.8.3",
-    "sql.js": "^1.14.1",
-    "web-push": "^3.6.7"
+    "jsonwebtoken": "^9.0.3",
+    "socket.io": "^4.8.3"
   }
 }
