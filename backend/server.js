@@ -35,6 +35,8 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '32kb' }));
 
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
 const loginAttempts = new Map();
 const BAN_STEPS = [5 * 60_000, 60 * 60_000, 24 * 60 * 60_000];
 const USERNAME_PATTERN = /^[A-Za-z0-9_-]{1,10}$/;
@@ -231,4 +233,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = Number(process.env.PORT || 3000);
-server.listen(PORT, () => console.log(`Smart Drainage API listening on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`Smart Drainage API listening on ${PORT}`));
