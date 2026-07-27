@@ -1,8 +1,8 @@
 /*
   Smart Drainage ESP32 - revised firmware
 
-  CHANGE ONLY THESE VALUES BEFORE UPLOADING:
-    WIFI_SSID, WIFI_PASSWORD, API_KEY, and UNIT_ID (if this is another drainage).
+  Before uploading, create secrets.h beside this file using secrets.example.h.
+  Set WIFI_SSID, WIFI_PASSWORD, API_KEY, and UNIT_ID there.
 
   Keep the existing hardware pins unless the physical wiring changes:
     JSN-SR04T: TRIG 12, ECHO 13
@@ -22,12 +22,12 @@
 #include <Preferences.h>
 #include <time.h>
 
-// ========== CHANGE THESE BEFORE UPLOADING ==========
-const char* WIFI_SSID = "YOUR_WIFI_NAME";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+// Create a private secrets.h file from secrets.example.h before uploading.
+// secrets.h is deliberately excluded from GitHub.
+#include "secrets.h"
+
+// ========== DEPLOYED API ==========
 const char* API_BASE_URL = "https://smart-drainage-api.onrender.com";
-const char* API_KEY = "PASTE_THE_SAME_API_KEY_FROM_RENDER_HERE";
-const char* UNIT_ID = "drainage_1";
 
 // ========== EXISTING HARDWARE PINS ==========
 constexpr int TRIG_PIN = 12;

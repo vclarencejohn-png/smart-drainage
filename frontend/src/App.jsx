@@ -23,7 +23,8 @@ const connectionFor = (reading, now) => {
 const statusFor = (reading, connection) => {
   if (!reading) return { label: 'NOT CONNECTED', tone: 'waiting' };
   if (!connection.isLive) return { label: 'DISCONNECTED', tone: 'offline' };
-  if (reading.overflow || reading.debris_level >= 75) return { label: 'FULL', tone: 'full' };
+  if (reading.overflow) return { label: 'OVERFLOW', tone: 'overflow' };
+  if (reading.debris_level >= 75) return { label: 'FULL', tone: 'full' };
   if (reading.debris_level >= 40) return { label: 'WARNING', tone: 'warning' };
   return { label: 'NORMAL', tone: 'normal' };
 };
@@ -83,6 +84,9 @@ function App() {
     const initialLoad = window.setTimeout(() => { loadDashboard(); }, 0);
     const socket = io(SOCKET_URL, { auth: { token: session.token } });
     socket.on('reading:update', (reading) => setReadings((current) => ({ ...current, [reading.unit_id]: reading })));
+    socket.on('calibration:update', (calibration) => setUnits((current) => current.map((unit) => (
+      unit.device_id === calibration.device_id ? { ...unit, ...calibration } : unit
+    ))));
     socket.on('connect_error', (error) => {
       if (error.message === 'Authentication required') handleLogout();
     });

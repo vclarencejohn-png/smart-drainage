@@ -235,9 +235,10 @@ app.post('/api/device-config/:deviceId/calibration', requireDeviceKey, async (re
     .from('drainage_units')
     .update({ empty_distance: emptyDistance, calibrated_at: new Date().toISOString(), calibration_requested_at: null })
     .eq('id', unit.id)
-    .select('device_id, empty_distance, full_distance, calibrated_at')
+    .select('device_id, empty_distance, full_distance, calibration_requested_at, calibrated_at')
     .single();
   if (error) return res.status(500).json({ error: error.message });
+  io.emit('calibration:update', data);
   return res.json({ success: true, calibration: data });
 });
 

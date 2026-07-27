@@ -71,6 +71,7 @@ button:hover { background: #1d344a; border-color: #57d8ee; transform: translateY
 .drainage-card.normal { border-top-color: #31d07e; background: linear-gradient(145deg, #0c2119, #0a1511); }
 .drainage-card.warning { border-top-color: #f4bb3e; background: linear-gradient(145deg, #251c0c, #151109); }
 .drainage-card.full { border-top-color: #ff5b64; background: linear-gradient(145deg, #281013, #180a0c); }
+.drainage-card.overflow { border-top-color: #ff3542; background: linear-gradient(145deg, #3a080d, #210509); }
 .drainage-card.waiting { border-top-color: #718096; }
 .drainage-card.offline { border-top-color: #ff7980; background: linear-gradient(145deg, #25151a, #150c10); }
 
