@@ -105,6 +105,10 @@ input::placeholder { color: #718096; } input:focus, select:focus { outline: 2px 
 .admin-list { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 8px; }
 .admin-list li { padding: 13px; background: #0c121b; border: 1px solid #273647; border-radius: 7px; display: flex; align-items: center; gap: 12px; }
 .admin-list span { color: #91a5ba; }
+.admin-list li > div { display: grid; gap: 4px; }
+.admin-list small { color: #79cee0; font-size: .72rem; }
+.calibrate-button { margin-left: auto; background: #1d4b56; border-color: #3d94a7; }
+.calibrate-button:hover { background: #276978; border-color: #65d5e9; }
 .delete-button { margin-left: auto; background: #69232b; border-color: #9c3c44; }.delete-button:hover { background: #8e2e38; border-color: #ff6972; }
 
 @media (max-width: 700px) {
@@ -112,5 +116,5 @@ input::placeholder { color: #718096; } input:focus, select:focus { outline: 2px 
   header { align-items: flex-start; flex-direction: column; }
   .admin-form { grid-template-columns: 1fr; }
   .admin-list li { flex-wrap: wrap; gap: 7px; }
-  .delete-button { margin-left: auto; }
+  .calibrate-button, .delete-button { margin-left: auto; }
 }

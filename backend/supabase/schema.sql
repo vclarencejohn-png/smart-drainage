@@ -14,6 +14,10 @@ create table if not exists public.drainage_units (
   name text not null,
   device_id text not null unique,
   location text not null default '',
+  empty_distance double precision,
+  full_distance double precision not null default 21 check (full_distance = 21),
+  calibration_requested_at timestamptz,
+  calibrated_at timestamptz,
   created_at timestamptz not null default now()
 );
 

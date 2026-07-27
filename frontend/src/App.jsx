@@ -120,7 +120,7 @@ function App() {
     playAlarm();
     speakAlert();
     const soundInterval = window.setInterval(playAlarm, 1_000);
-    const voiceInterval = window.setInterval(speakAlert, 10_000);
+    const voiceInterval = window.setInterval(speakAlert, 4_000);
     return () => {
       window.clearInterval(soundInterval);
       window.clearInterval(voiceInterval);
@@ -173,6 +173,16 @@ function App() {
     } catch (error) { setFormError(error.message); }
   }
 
+  async function requestCalibration(unit) {
+    const message = `Calibrate zero for ${unit.name}? Make sure its debris storage is empty. The ESP32 will measure its empty distance within about 10 seconds.`;
+    if (!window.confirm(message)) return;
+    setFormError('');
+    try {
+      await request(`/api/drainages/${unit.id}/calibrate`, { method: 'POST' });
+      await loadDashboard();
+    } catch (error) { setFormError(error.message); }
+  }
+
   async function deleteDrainage(unit) {
     if (!window.confirm(`Delete ${unit.name}? This is only allowed when it has no saved readings.`)) return;
     setFormError('');
@@ -198,7 +208,7 @@ function App() {
   return <main className="app-shell">
     <audio ref={alarmRef} src="/alarm.wav" preload="auto" />
     <header><div><h1>Smart Drainage</h1><p>Real-time monitoring</p></div><div className="header-actions"><div className="live-time"><span>PH TIME</span><strong>{currentTime.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</strong></div>{session.user.role === 'admin' && <button onClick={() => setAdminOpen((open) => !open)}>{adminOpen ? 'Close Admin' : 'Admin'}</button>}<button onClick={handleLogout}>Logout</button></div></header>
-    {session.user.role === 'admin' && adminOpen && <section className="admin-panel"><div className="tabs"><button className={adminTab === 'drainages' ? 'active' : ''} onClick={() => setAdminTab('drainages')}>Drainages</button><button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}>Users</button></div>{formError && <p className="error">{formError}</p>}{adminTab === 'drainages' ? <><form className="admin-form" onSubmit={createDrainage}><input required placeholder="Drainage name" value={newDrainage.name} onChange={(event) => setNewDrainage({ ...newDrainage, name: event.target.value })} /><input required placeholder="Device ID" value={newDrainage.device_id} onChange={(event) => setNewDrainage({ ...newDrainage, device_id: event.target.value })} /><input placeholder="Location" value={newDrainage.location} onChange={(event) => setNewDrainage({ ...newDrainage, location: event.target.value })} /><button>Add drainage</button></form><ul className="admin-list">{units.map((unit) => <li key={unit.id}><strong>{unit.name}</strong><span>{unit.device_id} · {unit.location || 'No location'}</span><button className="delete-button" onClick={() => deleteDrainage(unit)}>Delete</button></li>)}</ul></> : <><form className="admin-form" onSubmit={createUser}><input required maxLength="10" placeholder="Username" value={newUser.username} onChange={(event) => setNewUser({ ...newUser, username: event.target.value })} /><input required type="password" maxLength="10" placeholder="Password" value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} /><select value={newUser.role} onChange={(event) => setNewUser({ ...newUser, role: event.target.value })}><option value="user">User</option><option value="admin">Admin</option></select><button>Create user</button></form><ul className="admin-list">{users.map((user) => <li key={user.id}><strong>{user.username}</strong><span>{user.role}</span>{user.id !== session.user.id && <button className="delete-button" onClick={() => deleteUser(user)}>Delete</button>}</li>)}</ul></>}</section>}
+    {session.user.role === 'admin' && adminOpen && <section className="admin-panel"><div className="tabs"><button className={adminTab === 'drainages' ? 'active' : ''} onClick={() => setAdminTab('drainages')}>Drainages</button><button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}>Users</button></div>{formError && <p className="error">{formError}</p>}{adminTab === 'drainages' ? <><form className="admin-form" onSubmit={createDrainage}><input required placeholder="Drainage name" value={newDrainage.name} onChange={(event) => setNewDrainage({ ...newDrainage, name: event.target.value })} /><input required placeholder="Device ID" value={newDrainage.device_id} onChange={(event) => setNewDrainage({ ...newDrainage, device_id: event.target.value })} /><input placeholder="Location" value={newDrainage.location} onChange={(event) => setNewDrainage({ ...newDrainage, location: event.target.value })} /><button>Add drainage</button></form><ul className="admin-list">{units.map((unit) => <li key={unit.id}><div><strong>{unit.name}</strong><span>{unit.device_id} · {unit.location || 'No location'}</span><small>{unit.calibration_requested_at ? 'Calibration pending — waiting for ESP32' : unit.empty_distance ? `Zero calibrated: ${Number(unit.empty_distance).toFixed(2)} cm` : 'Zero not calibrated'}</small></div><button className="calibrate-button" onClick={() => requestCalibration(unit)}>Calibrate zero</button><button className="delete-button" onClick={() => deleteDrainage(unit)}>Delete</button></li>)}</ul></> : <><form className="admin-form" onSubmit={createUser}><input required maxLength="10" placeholder="Username" value={newUser.username} onChange={(event) => setNewUser({ ...newUser, username: event.target.value })} /><input required type="password" maxLength="10" placeholder="Password" value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} /><select value={newUser.role} onChange={(event) => setNewUser({ ...newUser, role: event.target.value })}><option value="user">User</option><option value="admin">Admin</option></select><button>Create user</button></form><ul className="admin-list">{users.map((user) => <li key={user.id}><strong>{user.username}</strong><span>{user.role}</span>{user.id !== session.user.id && <button className="delete-button" onClick={() => deleteUser(user)}>Delete</button>}</li>)}</ul></>}</section>}
     <section className={`drainage-grid ${expandedId ? 'expanded' : ''}`}>
       {visibleCards.map(({ unit, reading, connection, status }) => <article className={`drainage-card ${status.tone}`} key={unit.id}>
         <div className="card-controls"><button aria-label={expandedId ? 'Restore grid' : `Maximize ${unit.name}`} onClick={() => setExpandedId(expandedId ? null : unit.id)}>⛶</button><button aria-label={mutedIds.has(unit.id) ? `Unmute ${unit.name}` : `Mute ${unit.name}`} onClick={() => setMutedIds((current) => { const next = new Set(current); if (next.has(unit.id)) next.delete(unit.id); else next.add(unit.id); return next; })}>{mutedIds.has(unit.id) ? '🔇' : '🔊'}</button></div>

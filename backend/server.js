@@ -87,14 +87,14 @@ function requireDeviceKey(req, res, next) {
 }
 
 function validReading(body) {
-  const requiredFields = ['unit_id', 'debris_level', 'distance', 'overflow', 'led_status', 'battery', 'timestamp'];
+  const requiredFields = ['unit_id', 'debris_level', 'distance', 'overflow', 'led_status', 'timestamp'];
   if (requiredFields.some((field) => body[field] === undefined || body[field] === null)) return false;
   if (typeof body.unit_id !== 'string' || !body.unit_id.trim()) return false;
   if (!Number.isFinite(Number(body.debris_level)) || Number(body.debris_level) < 0 || Number(body.debris_level) > 100) return false;
   if (!Number.isFinite(Number(body.distance)) || Number(body.distance) < 0) return false;
   if (typeof body.overflow !== 'boolean') return false;
   if (!['GREEN', 'YELLOW', 'RED'].includes(body.led_status)) return false;
-  if (!Number.isInteger(Number(body.battery)) || Number(body.battery) < 0 || Number(body.battery) > 100) return false;
+  if (body.battery !== undefined && (!Number.isInteger(Number(body.battery)) || Number(body.battery) < 0 || Number(body.battery) > 100)) return false;
   return !Number.isNaN(Date.parse(body.timestamp));
 }
 
@@ -138,6 +138,18 @@ app.post('/api/drainages', authenticate, requireAdmin, async (req, res) => {
   const { data, error } = await supabase.from('drainage_units').insert([{ name: name.trim(), device_id: device_id.trim(), location: String(location).trim() }]).select().single();
   if (error) return res.status(400).json({ error: error.message });
   return res.status(201).json(data);
+});
+
+app.post('/api/drainages/:id/calibrate', authenticate, requireAdmin, async (req, res) => {
+  const { data, error } = await supabase
+    .from('drainage_units')
+    .update({ calibration_requested_at: new Date().toISOString() })
+    .eq('id', req.params.id)
+    .select('*')
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Drainage not found' });
+  return res.json(data);
 });
 
 app.delete('/api/drainages/:id', authenticate, requireAdmin, async (req, res) => {
@@ -185,6 +197,50 @@ app.delete('/api/users/:id', authenticate, requireAdmin, async (req, res) => {
   return res.json({ success: true });
 });
 
+app.get('/api/device-config/:deviceId', requireDeviceKey, async (req, res) => {
+  const deviceId = decodeURIComponent(req.params.deviceId).trim();
+  const { data, error } = await supabase
+    .from('drainage_units')
+    .select('device_id, empty_distance, full_distance, calibration_requested_at, calibrated_at')
+    .eq('device_id', deviceId)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Unknown drainage device ID' });
+  return res.json({
+    unit_id: data.device_id,
+    empty_distance: data.empty_distance,
+    full_distance: data.full_distance,
+    calibration_pending: Boolean(data.calibration_requested_at),
+    calibration_requested_at: data.calibration_requested_at,
+    calibrated_at: data.calibrated_at,
+  });
+});
+
+app.post('/api/device-config/:deviceId/calibration', requireDeviceKey, async (req, res) => {
+  const deviceId = decodeURIComponent(req.params.deviceId).trim();
+  const emptyDistance = Number(req.body.empty_distance);
+  if (!Number.isFinite(emptyDistance) || emptyDistance <= 21 || emptyDistance > 400) {
+    return res.status(400).json({ error: 'Empty distance must be greater than 21 cm and no more than 400 cm' });
+  }
+  const { data: unit, error: unitError } = await supabase
+    .from('drainage_units')
+    .select('id, calibration_requested_at')
+    .eq('device_id', deviceId)
+    .maybeSingle();
+  if (unitError) return res.status(500).json({ error: unitError.message });
+  if (!unit) return res.status(404).json({ error: 'Unknown drainage device ID' });
+  if (!unit.calibration_requested_at) return res.status(409).json({ error: 'No calibration request is pending' });
+
+  const { data, error } = await supabase
+    .from('drainage_units')
+    .update({ empty_distance: emptyDistance, calibrated_at: new Date().toISOString(), calibration_requested_at: null })
+    .eq('id', unit.id)
+    .select('device_id, empty_distance, full_distance, calibrated_at')
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  return res.json({ success: true, calibration: data });
+});
+
 app.post('/api/readings', requireDeviceKey, async (req, res) => {
   if (!validReading(req.body)) return res.status(400).json({ error: 'Invalid reading payload' });
   const payload = {
@@ -193,7 +249,7 @@ app.post('/api/readings', requireDeviceKey, async (req, res) => {
     distance: Number(req.body.distance),
     overflow: req.body.overflow,
     led_status: req.body.led_status,
-    battery: Number(req.body.battery),
+    battery: req.body.battery === undefined ? 100 : Number(req.body.battery),
     timestamp: new Date(req.body.timestamp).toISOString(),
   };
   const { data: unit, error: unitError } = await supabase.from('drainage_units').select('id').eq('device_id', payload.unit_id).maybeSingle();
