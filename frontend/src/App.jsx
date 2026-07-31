@@ -34,6 +34,29 @@ const secondsToText = (seconds) => {
   return `${minutes} minute${minutes === 1 ? '' : 's'}`;
 };
 
+const demoUnits = [
+  { id: 'demo-1', name: 'Drainage 1', device_id: 'demo_drainage_1', location: 'Main Street', empty_distance: 33.2 },
+  { id: 'demo-2', name: 'Drainage 2', device_id: 'demo_drainage_2', location: 'Market Road', empty_distance: 33.1 },
+  { id: 'demo-3', name: 'Drainage 3', device_id: 'demo_drainage_3', location: 'Community Hall', empty_distance: 33.3 },
+  { id: 'demo-4', name: 'Drainage 4', device_id: 'demo_drainage_4', location: 'Riverside', empty_distance: 33.0 },
+  { id: 'demo-5', name: 'Drainage 5', device_id: 'demo_drainage_5', location: 'School Zone', empty_distance: null },
+];
+
+const createDemoReadings = () => {
+  const timestamp = new Date().toISOString();
+  return {
+    demo_drainage_1: { unit_id: 'demo_drainage_1', debris_level: 22, overflow: false, timestamp },
+    demo_drainage_2: { unit_id: 'demo_drainage_2', debris_level: 58, overflow: false, timestamp },
+    demo_drainage_3: { unit_id: 'demo_drainage_3', debris_level: 84, overflow: false, timestamp },
+    demo_drainage_4: { unit_id: 'demo_drainage_4', debris_level: 96, overflow: true, timestamp },
+  };
+};
+
+const demoUsers = [
+  { id: 'demo-admin', username: 'Portfolio Demo', role: 'admin' },
+  { id: 'demo-user', username: 'Tanod Demo', role: 'user' },
+];
+
 function App() {
   const [session, setSession] = useState(() => {
     try { return JSON.parse(localStorage.getItem('smart_drainage_session') || 'null'); } catch { return null; }
@@ -69,6 +92,7 @@ function App() {
   }, [session?.token]);
 
   const loadDashboard = useCallback(async () => {
+    if (session.user.demo) return;
     try {
       const [drainages, latest] = await Promise.all([request('/api/drainages'), request('/api/readings/latest')]);
       setUnits(drainages);
@@ -77,10 +101,14 @@ function App() {
     } catch (error) {
       if (error.message.includes('Authentication')) handleLogout();
     }
-  }, [request, session?.user?.role]);
+  }, [request, session?.user?.role, session?.user?.demo]);
 
   useEffect(() => {
     if (!session) return undefined;
+    if (session.user.demo) {
+      const timer = window.setInterval(() => setReadings(createDemoReadings()), 10_000);
+      return () => window.clearInterval(timer);
+    }
     const initialLoad = window.setTimeout(() => { loadDashboard(); }, 0);
     const socket = io(SOCKET_URL, { auth: { token: session.token } });
     socket.on('reading:update', (reading) => setReadings((current) => ({ ...current, [reading.unit_id]: reading })));
@@ -154,6 +182,15 @@ function App() {
     } catch (error) { setLoginError(error.message); }
   }
 
+  function startDemoMode() {
+    const demoSession = { token: 'demo-mode', user: { id: 'demo-admin', username: 'Portfolio Demo', role: 'admin', demo: true } };
+    setUnits(demoUnits);
+    setUsers(demoUsers);
+    setReadings(createDemoReadings());
+    setAdminOpen(false);
+    setSession(demoSession);
+  }
+
   function handleLogout() {
     localStorage.removeItem('smart_drainage_session');
     setSession(null);
@@ -167,6 +204,13 @@ function App() {
   async function createDrainage(event) {
     event.preventDefault();
     setFormError('');
+    if (session.user.demo) {
+      const deviceId = newDrainage.device_id.trim();
+      if (units.some((unit) => unit.device_id === deviceId)) { setFormError('Device ID already exists in this demo.'); return; }
+      setUnits((current) => [...current, { id: `demo-${Date.now()}`, ...newDrainage, empty_distance: null }]);
+      setNewDrainage({ name: '', device_id: '', location: '' });
+      return;
+    }
     try {
       await request('/api/drainages', { method: 'POST', body: JSON.stringify(newDrainage) });
       setNewDrainage({ name: '', device_id: '', location: '' });
@@ -177,6 +221,12 @@ function App() {
   async function createUser(event) {
     event.preventDefault();
     setFormError('');
+    if (session.user.demo) {
+      if (users.some((user) => user.username.toLowerCase() === newUser.username.trim().toLowerCase())) { setFormError('Username already exists in this demo.'); return; }
+      setUsers((current) => [...current, { id: `demo-${Date.now()}`, username: newUser.username, role: newUser.role }]);
+      setNewUser({ username: '', password: '', role: 'user' });
+      return;
+    }
     try {
       await request('/api/users', { method: 'POST', body: JSON.stringify(newUser) });
       setNewUser({ username: '', password: '', role: 'user' });
@@ -188,6 +238,10 @@ function App() {
     const message = `Calibrate zero for ${unit.name}? Make sure its debris storage is empty. The ESP32 will measure its empty distance within about 10 seconds.`;
     if (!window.confirm(message)) return;
     setFormError('');
+    if (session.user.demo) {
+      setUnits((current) => current.map((item) => (item.id === unit.id ? { ...item, empty_distance: 33.2, calibration_requested_at: null } : item)));
+      return;
+    }
     try {
       await request(`/api/drainages/${unit.id}/calibrate`, { method: 'POST' });
       await loadDashboard();
@@ -197,6 +251,11 @@ function App() {
   async function deleteDrainage(unit) {
     if (!window.confirm(`Delete ${unit.name}? This is only allowed when it has no saved readings.`)) return;
     setFormError('');
+    if (session.user.demo) {
+      setUnits((current) => current.filter((item) => item.id !== unit.id));
+      if (expandedId === unit.id) setExpandedId(null);
+      return;
+    }
     try {
       await request(`/api/drainages/${unit.id}`, { method: 'DELETE' });
       if (expandedId === unit.id) setExpandedId(null);
@@ -207,13 +266,17 @@ function App() {
   async function deleteUser(account) {
     if (!window.confirm(`Delete user ${account.username}?`)) return;
     setFormError('');
+    if (session.user.demo) {
+      setUsers((current) => current.filter((user) => user.id !== account.id));
+      return;
+    }
     try {
       await request(`/api/users/${account.id}`, { method: 'DELETE' });
       setUsers(await request('/api/users'));
     } catch (error) { setFormError(error.message); }
   }
 
-  if (!session) return <main className="login-page"><form className="login-card" onSubmit={handleLogin}><h1>Smart Drainage</h1><p>Real-time monitoring</p><label>Username<input maxLength="10" required value={login.username} onChange={(event) => setLogin({ ...login, username: event.target.value })} /></label><label>Password<input type="password" maxLength="10" required value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} /></label>{loginError && <p className="error">{loginError}</p>}<button type="submit">Login</button></form></main>;
+  if (!session) return <main className="login-page"><form className="login-card" onSubmit={handleLogin}><h1>Smart Drainage</h1><p>Real-time monitoring</p><label>Username<input maxLength="10" required value={login.username} onChange={(event) => setLogin({ ...login, username: event.target.value })} /></label><label>Password<input type="password" maxLength="10" required value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} /></label>{loginError && <p className="error">{loginError}</p>}<button type="submit">Login</button><button type="button" className="demo-button" onClick={startDemoMode}>Open portfolio demo</button><p className="demo-copy">Uses sample data only. Your real drainage records will not be changed.</p></form></main>;
 
   const visibleCards = expandedId ? cards.filter(({ unit }) => unit.id === expandedId) : cards;
   return <main className="app-shell">
