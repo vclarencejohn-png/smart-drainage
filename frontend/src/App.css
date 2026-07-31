@@ -112,10 +112,43 @@ input::placeholder { color: #718096; } input:focus, select:focus { outline: 2px 
 .calibrate-button:hover { background: #276978; border-color: #65d5e9; }
 .delete-button { margin-left: auto; background: #69232b; border-color: #9c3c44; }.delete-button:hover { background: #8e2e38; border-color: #ff6972; }
 
+.dashboard-panel { max-width: 1440px; margin: 0 auto; }
+.dashboard-tabs { margin: 0 0 16px; }
+.eyebrow { color: #79cee0; font-size: .68rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+
+.overall-updates, .hardware-info { border: 1px solid #2c3a4c; border-radius: 12px; background: #101722; box-shadow: 0 18px 42px #00000052; padding: 22px; }
+.overall-heading, .hardware-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 18px; }
+.overall-heading h2, .hardware-heading h2 { margin-top: 4px; font-size: 1.4rem; }
+.overall-heading > p, .hardware-heading > p { color: #91a5ba; max-width: 430px; font-size: .9rem; line-height: 1.5; }
+.overall-grid, .hardware-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+.overall-status-card, .hardware-grid article { border: 1px solid #2c3a4c; border-top: 3px solid #64748b; border-radius: 9px; padding: 16px; background: #0c121b; }
+.overall-status-card.normal { border-top-color: #31d07e; }
+.overall-status-card.warning { border-top-color: #f4bb3e; }
+.overall-status-card.full { border-top-color: #ff5b64; }
+.overall-status-card.overflow { border-top-color: #ff3542; }
+.overall-status-card.offline { border-top-color: #ff7980; }
+.overall-card-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.overall-card-title h3, .hardware-grid h3 { margin: 0; font-size: 1rem; }
+.overall-card-title > strong { min-width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #172638; color: #79cee0; }
+.overall-status-card > p { color: #91a5ba; font-size: .8rem; margin: 8px 0 12px; min-height: 36px; }
+.overall-status-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; }
+.overall-status-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid #243140; }
+.overall-status-list span { display: grid; gap: 2px; }
+.overall-status-list strong { font-size: .86rem; }
+.overall-status-list small { color: #8da0b5; }
+.overall-status-list b { color: #dce8f4; font-size: .68rem; letter-spacing: .05em; text-align: right; }
+.overall-empty { color: #718096 !important; font-style: italic; }
+
+.hardware-grid ul { margin: 12px 0 0; padding-left: 18px; color: #b9c8d8; display: grid; gap: 8px; font-size: .84rem; line-height: 1.4; }
+.hardware-grid li::marker { color: #79cee0; }
+.hardware-note { margin: 16px 0 0; border-left: 3px solid #42cbe4; padding: 10px 12px; background: #0a1822; color: #b9c8d8; font-size: .85rem; line-height: 1.45; }
+
 @media (max-width: 700px) {
   .app-shell { padding: 16px; }
   header { align-items: flex-start; flex-direction: column; }
   .admin-form { grid-template-columns: 1fr; }
   .admin-list li { flex-wrap: wrap; gap: 7px; }
   .calibrate-button, .delete-button { margin-left: auto; }
+  .overall-updates, .hardware-info { padding: 16px; }
+  .overall-heading, .hardware-heading { align-items: flex-start; flex-direction: column; }
 }
